@@ -46,6 +46,11 @@ fi
 
 set -a; . ./.env; set +a
 
+if ! command -v psql >/dev/null; then
+  bold "Installing postgresql-client (psql)..."
+  sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+fi
+
 bold "Installing dependencies..."
 npm install --no-fund --no-audit
 
