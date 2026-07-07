@@ -127,6 +127,30 @@ async function renderToday(refresh = false) {
         <button class="btn ghost" id="pushToday">✎ Today → Hevy</button>
       </div>
       <div id="syncResult"></div>
+      ${(t.workouts?.length || t.cardio?.length) ? `
+      <h2>Today's training</h2>
+      ${(t.workouts || []).map(w => `
+        <div class="card">
+          <b>${esc(w.title ?? w.slot ?? 'Workout')}</b>
+          <div class="muted">${w.total_sets} sets · ${Math.round(w.total_volume ?? 0).toLocaleString()} lb volume</div>
+          ${w.whoop ? `<div class="stats" style="margin:8px 0">
+            <span>Strain <b>${w.whoop.strain ?? '—'}</b></span>
+            <span>Avg HR <b>${w.whoop.avg_hr ?? '—'}</b></span>
+            <span>Max HR <b>${w.whoop.max_hr ?? '—'}</b></span>
+            ${w.whoop.kilojoules ? `<span>Cal <b>${Math.round(w.whoop.kilojoules / 4.184)}</b></span>` : ''}
+          </div>` : '<div class="muted" style="margin:6px 0">No WHOOP activity matched — start Strength Trainer next lift.</div>'}
+          ${w.exercises.map(e => `<p style="margin:2px 0">${esc(e.name)}: <span class="muted">${esc(e.sets)}</span></p>`).join('')}
+        </div>`).join('')}
+      ${(t.cardio || []).map(c => `
+        <div class="card">
+          <b>${esc(c.modality ?? 'Cardio')}${c.is_drift_test ? ' — DRIFT TEST' : ''}</b>
+          <div class="stats" style="margin-top:6px">
+            <span>Duration <b>${c.duration_min ?? '—'} min</b></span>
+            <span>Avg HR <b>${c.avg_hr ?? '—'}</b></span>
+            ${c.incline_pct != null ? `<span>Incline <b>${c.incline_pct}%</b></span>` : ''}
+            ${c.speed_mph != null ? `<span>Speed <b>${c.speed_mph} mph</b></span>` : ''}
+          </div>
+        </div>`).join('')}` : ''}
       <h2 style="margin-top:24px">Reply</h2>
       <div class="row"><textarea id="box" rows="2" placeholder="Talk to the coach…"></textarea><button class="btn" id="send">Send</button></div>
       <div id="reply"></div>`;
@@ -158,11 +182,11 @@ async function renderToday(refresh = false) {
         const s = await api('/sync/hevy', { method: 'POST' });
         const prog = await api('/progression/apply', { method: 'POST' });
         const moves = (prog.moved || []).map(m => `⬆️ ${m.exercise}: ${m.from} → ${m.to} lb`);
+        await renderToday(); // re-render so Today's training section appears
         document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
           `Pulled ${s.synced} workout(s) from Hevy.` +
           (moves.length ? '<br>' + moves.join('<br>') : '<br>No progression bumps yet — earned after 2 good exposures.') +
           '</div>';
-        e.target.textContent = 'Synced ✓';
       } catch (err) {
         document.getElementById('syncResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
         e.target.disabled = false; e.target.textContent = '🏋️ Sync workout';
