@@ -10,16 +10,108 @@ import { one, q } from '../lib/db.js';
 const MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
 const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY
 
-async function callCoach(
-  messages: Anthropic.MessageParam[]
-): Promise<string> {
+// --- The coach's hands: actions it can take when asked in chat ---
+
+const COACH_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'write_routine_to_hevy',
+    description:
+      "Write a lifting session into Matt's Hevy app (Coach folder) as a routine. " +
+      'Use when Matt asks to send/update a workout in Hevy. The session content ' +
+      'comes from this conversation and the working weights.',
+    input_schema: {
+      type: 'object',
+      properties: { day: { type: 'string', enum: ['today', 'tomorrow'] } },
+      required: ['day'],
+    },
+  },
+  {
+    name: 'sync_hevy',
+    description: "Pull Matt's latest logged workouts from Hevy into the database. Use when he says he finished a session.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'sync_whoop',
+    description: 'Pull the latest WHOOP recovery/sleep/strain data into the database.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'apply_progression',
+    description: 'Run the +5/+10 progression rule over recent history and update working weights. Returns what moved.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'update_working_weight',
+    description:
+      'Set a working weight and/or note for one exercise (calibration results, coaching decisions). ' +
+      'Use the exact exercise name from the working-weights table in context.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        exercise: { type: 'string' },
+        weight_lbs: { type: 'number' },
+        note: { type: 'string' },
+      },
+      required: ['exercise', 'weight_lbs'],
+    },
+  },
+];
+
+async function runTool(name: string, input: any): Promise<string> {
+  switch (name) {
+    case 'write_routine_to_hevy': {
+      const { pushRoutine } = await import('../services/hevyRoutine.js');
+      return JSON.stringify(await pushRoutine(input.day === 'today' ? 0 : 1));
+    }
+    case 'sync_hevy': {
+      const { syncHevy } = await import('../services/hevySync.js');
+      return `Synced ${await syncHevy()} workout(s) from Hevy.`;
+    }
+    case 'sync_whoop': {
+      const { syncWhoop } = await import('../services/whoopSync.js');
+      return `Synced ${await syncWhoop()} day(s) from WHOOP.`;
+    }
+    case 'apply_progression': {
+      const { applyProgression } = await import('../services/progression.js');
+      return JSON.stringify({ moved: await applyProgression() });
+    }
+    case 'update_working_weight': {
+      const rows = await q(
+        `UPDATE working_weights
+         SET weight_lbs = $2, note = COALESCE($3, note), updated_at = now()
+         WHERE exercise = $1 RETURNING exercise`,
+        [input.exercise, input.weight_lbs, input.note ?? null]
+      );
+      return rows.length
+        ? `${input.exercise} set to ${input.weight_lbs} lb.`
+        : `No exercise named "${input.exercise}" — use the exact name from the working-weights table.`;
+    }
+    default:
+      return `Unknown tool: ${name}`;
+  }
+}
+
+async function coachRequest(
+  messages: Anthropic.MessageParam[],
+  withTools = false
+): Promise<Anthropic.Message> {
   const context = await buildContext();
-  const res = await anthropic.messages.create({
+  const toolNote = withTools
+    ? '\n\nYou have tools to act on Matt\'s systems (sync data, write routines to Hevy, ' +
+      'update working weights). Use them when he asks or when clearly needed, then ' +
+      'confirm what you did in one line.'
+    : '';
+  return anthropic.messages.create({
     model: MODEL,
     max_tokens: 1500,
-    system: `${COACH_SYSTEM_PROMPT}\n\n=== LIVE STATE (injected at runtime) ===\n${context}`,
+    system: `${COACH_SYSTEM_PROMPT}${toolNote}\n\n=== LIVE STATE (injected at runtime) ===\n${context}`,
     messages,
+    ...(withTools ? { tools: COACH_TOOLS } : {}),
   });
+}
+
+async function callCoach(messages: Anthropic.MessageParam[]): Promise<string> {
+  const res = await coachRequest(messages);
   return res.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
     .map((b) => b.text)
@@ -108,7 +200,10 @@ export async function planSession(date: string, weekday: string, slot: string): 
   return JSON.parse(match[0]);
 }
 
-/** Free-form chat with the same brain. Recent history rides along. */
+/**
+ * Free-form chat with the same brain, with hands: the coach can sync
+ * data, write routines to Hevy, and update weights mid-conversation.
+ */
 export async function chat(message: string): Promise<string> {
   const history = await q<{ role: string; content: string }>(
     `SELECT role, content FROM (
@@ -124,7 +219,38 @@ export async function chat(message: string): Promise<string> {
     ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     { role: 'user' as const, content: message },
   ];
-  const reply = await callCoach(messages);
+
+  let reply = '';
+  for (let round = 0; round < 5; round++) {
+    const res = await coachRequest(messages, true);
+    const text = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n');
+
+    if (res.stop_reason !== 'tool_use') {
+      reply = text;
+      break;
+    }
+
+    // Execute the requested actions and hand results back.
+    messages.push({ role: 'assistant', content: res.content });
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const b of res.content) {
+      if (b.type !== 'tool_use') continue;
+      let out: string;
+      try {
+        out = await runTool(b.name, b.input);
+      } catch (e: any) {
+        out = `ERROR: ${e.message}`;
+      }
+      results.push({ type: 'tool_result', tool_use_id: b.id, content: out });
+    }
+    messages.push({ role: 'user', content: results });
+    reply = text; // keep last text in case the loop caps out
+  }
+
+  if (!reply) reply = 'Done (actions ran, but I lost my words — check Hevy/data).';
   await log('assistant', 'chat', reply);
   return reply;
 }
