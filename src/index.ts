@@ -19,6 +19,7 @@ import { syncWhoop } from './services/whoopSync.js';
 import { syncHevy } from './services/hevySync.js';
 import { applyProgression } from './services/progression.js';
 import { pushRoutine } from './services/hevyRoutine.js';
+import { morningCheckin } from './coach/coach.js';
 
 const app = express();
 app.use(express.json());
@@ -76,3 +77,28 @@ app.post('/progression/apply', async (_req, res) => {
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, () => console.log(`fitness-coach listening on :${port}`));
+
+// --- Nightly automation (local time via TZ) ---
+// 04:30 sync WHOOP · 04:35 sync Hevy + progressions · 05:30 fresh check-in.
+// Runs inside the web service, so deploys need no separate cron jobs.
+const lastRun = new Map<string, string>();
+function dailyAt(hhmm: string, task: string, fn: () => Promise<unknown>) {
+  setInterval(async () => {
+    const now = new Date();
+    const day = now.toLocaleDateString('en-CA');
+    if (now.toTimeString().slice(0, 5) !== hhmm || lastRun.get(task) === day) return;
+    lastRun.set(task, day);
+    try {
+      await fn();
+      console.log(`[auto] ${task} ok (${day})`);
+    } catch (e: any) {
+      console.error(`[auto] ${task} failed: ${e.message}`);
+    }
+  }, 25_000);
+}
+dailyAt('04:30', 'sync-whoop', () => syncWhoop());
+dailyAt('04:35', 'sync-hevy', async () => {
+  await syncHevy();
+  await applyProgression();
+});
+dailyAt('05:30', 'morning-checkin', () => morningCheckin(true));

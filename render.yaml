@@ -1,0 +1,28 @@
+# Render blueprint. Dashboard → New → Blueprint → pick this repo.
+# The database already exists on Render — paste its EXTERNAL URL when
+# prompted for DATABASE_URL (the code handles TLS itself).
+# plan: starter stays warm 24/7 (~$7/mo); change to "free" to accept a
+# ~45s cold start after idle instead.
+
+services:
+  - type: web
+    name: fitness-coach
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: TZ
+        value: America/Denver
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: HEVY_API_KEY
+        sync: false
+      - key: WHOOP_CLIENT_ID
+        sync: false
+      - key: WHOOP_CLIENT_SECRET
+        sync: false
+      - key: WHOOP_REDIRECT_URI
+        sync: false
