@@ -25,6 +25,21 @@ app.use(todayRouter);
 app.use(chatRouter);
 app.use(planRouter);
 
+app.get('/', (_req, res) => {
+  res.type('html').send(`<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fitness Coach</title>
+<body style="font-family:-apple-system,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.6">
+<h1>Fitness Coach</h1>
+<ul>
+  <li><a href="/today">/today</a> — recovery + the coach's call</li>
+  <li><a href="/plan">/plan</a> — phase arc + working weights</li>
+  <li><a href="/chat">/chat</a> — transcript (POST to talk)</li>
+  <li><a href="/auth/whoop">/auth/whoop</a> — connect WHOOP (once)</li>
+</ul>
+</body>`);
+});
+
 app.get('/auth/whoop', (_req, res) => res.redirect(authorizeUrl()));
 
 app.get('/auth/whoop/callback', async (req, res) => {
