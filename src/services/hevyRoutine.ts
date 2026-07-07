@@ -27,6 +27,9 @@ const ALIASES: Record<string, string> = {
   'Back Squat': 'Squat (Barbell)',
   'Romanian Deadlift': 'Romanian Deadlift (Barbell)',
   'Leg Curl': 'Lying Leg Curl (Machine)',
+  "Farmer's Carry": 'Farmers Walk',
+  'Farmers Carry': 'Farmers Walk',
+  'Farmer Carry': 'Farmers Walk',
 };
 
 const norm = (s: string) =>
