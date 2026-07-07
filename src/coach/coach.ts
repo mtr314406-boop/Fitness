@@ -65,7 +65,25 @@ async function runTool(name: string, input: any): Promise<string> {
     }
     case 'sync_hevy': {
       const { syncHevy } = await import('../services/hevySync.js');
-      return `Synced ${await syncHevy()} workout(s) from Hevy.`;
+      const n = await syncHevy();
+      const s = await one(
+        `SELECT id, day, title, total_sets, total_volume FROM workout_sessions
+         ORDER BY day DESC, synced_at DESC LIMIT 1`
+      );
+      if (!s) return `Synced ${n} workout(s); database has none.`;
+      const sets = await q(
+        `SELECT exercise, weight_lbs, reps, rpe FROM workout_sets WHERE session_id = $1 ORDER BY id`,
+        [s.id]
+      );
+      const byExercise = new Map<string, string[]>();
+      for (const x of sets) {
+        const arr = byExercise.get(x.exercise) ?? [];
+        arr.push(`${x.weight_lbs ?? 'bw'}x${x.reps ?? '?'}${x.rpe ? `@${x.rpe}` : ''}`);
+        byExercise.set(x.exercise, arr);
+      }
+      const detail = [...byExercise].map(([ex, arr]) => `  ${ex}: ${arr.join(', ')}`).join('\n');
+      const dayStr = s.day instanceof Date ? s.day.toISOString().slice(0, 10) : s.day;
+      return `Synced ${n} workout(s). Most recent — ${dayStr} ${s.title} (${s.total_sets} sets, ${s.total_volume} lb):\n${detail}`;
     }
     case 'sync_whoop': {
       const { syncWhoop } = await import('../services/whoopSync.js');
@@ -99,7 +117,8 @@ async function coachRequest(
   const toolNote = withTools
     ? '\n\nYou have tools to act on Matt\'s systems (sync data, write routines to Hevy, ' +
       'update working weights). Use them when he asks or when clearly needed, then ' +
-      'confirm what you did in one line.'
+      'confirm what you did in one line. The LIVE STATE block is rebuilt fresh after ' +
+      'every tool call — after a sync, what you see there IS current; never claim it is stale.'
     : '';
   return anthropic.messages.create({
     model: MODEL,
