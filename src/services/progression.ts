@@ -80,15 +80,29 @@ export async function applyProgression(): Promise<ProgressionResult[]> {
 
 // --- Tomorrow's session, from the weekly structure + working weights ---
 
-const TEMPLATE_BY_DOW: Record<number, { slot: string; exercises: string[] } | null> = {
-  1: { slot: 'MON Upper (Strength)', exercises: ['Barbell Bench Press', 'Barbell OHP', 'Barbell Bent Over Row', 'Lat Pulldown', 'Barbell Curl'] },
-  2: { slot: 'TUE Lower (Strength)', exercises: ['Back Squat', 'Conventional Deadlift', 'Bulgarian Split Squat', 'Leg Curl'] },
+export type DayKind = 'strength' | 'hypertrophy';
+
+export const TEMPLATE_BY_DOW: Record<number, { slot: string; kind: DayKind; exercises: string[] } | null> = {
+  1: { slot: 'MON Upper (Strength)', kind: 'strength', exercises: ['Barbell Bench Press', 'Barbell OHP', 'Barbell Bent Over Row', 'Lat Pulldown', 'Barbell Curl'] },
+  2: { slot: 'TUE Lower (Strength)', kind: 'strength', exercises: ['Back Squat', 'Conventional Deadlift', 'Bulgarian Split Squat', 'Leg Curl'] },
   3: null, // WED Zone 2 — aerobic, lives in cardio_sessions not Hevy
-  4: { slot: 'THU Upper (Hypertrophy)', exercises: ['Incline Barbell Press', 'Dumbbell Bench Press', 'Lat Pulldown', 'Lateral Raise', 'Tricep Pushdown', 'Barbell Curl'] },
-  5: { slot: 'FRI Lower (Hypertrophy)', exercises: ['Back Squat', 'Romanian Deadlift', 'Bulgarian Split Squat', 'Leg Curl'] },
+  4: { slot: 'THU Upper (Hypertrophy)', kind: 'hypertrophy', exercises: ['Incline Barbell Press', 'Dumbbell Bench Press', 'Lat Pulldown', 'Lateral Raise', 'Tricep Pushdown', 'Barbell Curl'] },
+  5: { slot: 'FRI Lower (Hypertrophy)', kind: 'hypertrophy', exercises: ['Back Squat', 'Romanian Deadlift', 'Bulgarian Split Squat', 'Leg Curl'] },
   6: null, // SAT long Z2 / pack hike
   0: null, // SUN recovery
 };
+
+// Default set/rep/rest prescriptions per the spec's RPE ranges. The coach
+// adjusts on the day; these are what gets written into the Hevy routine.
+export function prescriptionFor(
+  w: { is_compound?: boolean } | null,
+  kind: DayKind
+): { sets: number; reps: number; rest: number } {
+  if (w?.is_compound) {
+    return kind === 'strength' ? { sets: 4, reps: 5, rest: 180 } : { sets: 3, reps: 8, rest: 150 };
+  }
+  return kind === 'strength' ? { sets: 3, reps: 8, rest: 120 } : { sets: 3, reps: 12, rest: 90 };
+}
 
 export async function buildTomorrowPlan(): Promise<{ slot: string; lines: string[] } | null> {
   const tomorrow = new Date(Date.now() + 86_400_000);
@@ -99,8 +113,9 @@ export async function buildTomorrowPlan(): Promise<{ slot: string; lines: string
   for (const name of template.exercises) {
     const w = await one(`SELECT * FROM working_weights WHERE exercise = $1`, [name]);
     if (!w) continue;
+    const p = prescriptionFor(w, template.kind);
     lines.push(
-      `${name}: ${w.weight_lbs ?? 'CALIBRATE'} lb` +
+      `${name}: ${p.sets}x${p.reps} @ ${w.weight_lbs ?? 'CALIBRATE'} lb` +
         (w.hard_cap_lbs ? ` (cap ${w.hard_cap_lbs})` : '') +
         ` — progress by ${w.progression}`
     );

@@ -6,7 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "db:init": "psql $DATABASE_URL -f db/schema.sql && psql $DATABASE_URL -f db/seed.sql",
     "sync:whoop": "tsx src/services/whoopSync.ts",
-    "sync:hevy": "tsx src/services/hevySync.ts"
+    "sync:hevy": "tsx src/services/hevySync.ts",
+    "routine:push": "tsx src/services/hevyRoutine.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

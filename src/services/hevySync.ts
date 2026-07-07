@@ -4,9 +4,7 @@
 
 import 'dotenv/config';
 import { q } from '../lib/db.js';
-
-const API = 'https://api.hevyapp.com/v1';
-const KG_TO_LBS = 2.20462;
+import { hevy, KG_TO_LBS } from '../lib/hevy.js';
 
 // Weekly structure → slot label, keyed by JS getDay() (0 = Sunday).
 const SLOT_BY_DOW: Record<number, string> = {
@@ -19,14 +17,6 @@ const SLOT_BY_DOW: Record<number, string> = {
   0: 'SUN_RECOVERY',
 };
 
-async function hevyGet(path: string): Promise<any> {
-  const key = process.env.HEVY_API_KEY;
-  if (!key) throw new Error('HEVY_API_KEY is not set — see .env.example');
-  const res = await fetch(`${API}${path}`, { headers: { 'api-key': key } });
-  if (!res.ok) throw new Error(`Hevy GET ${path} failed: ${res.status} ${await res.text()}`);
-  return res.json();
-}
-
 const toLbs = (kg: number | null | undefined) =>
   kg == null ? null : Math.round(kg * KG_TO_LBS * 10) / 10;
 
@@ -35,7 +25,7 @@ export async function syncHevy(pages = 3): Promise<number> {
   let synced = 0;
 
   for (let page = 1; page <= pages; page++) {
-    const data = await hevyGet(`/workouts?page=${page}&pageSize=10`);
+    const data = await hevy(`/workouts?page=${page}&pageSize=10`);
     const workouts = data.workouts ?? [];
 
     for (const w of workouts) {

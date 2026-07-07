@@ -197,7 +197,9 @@ async function renderPlan() {
       <h2>The week</h2>
       <div class="card">${p.week.map(d => '<p>' + esc(d) + '</p>').join('')}</div>
       ${p.tomorrow ? `<h2>Tomorrow: ${esc(p.tomorrow.slot)}</h2>
-      <div class="card">${p.tomorrow.lines.map(l => '<p>' + esc(l) + '</p>').join('')}</div>` : ''}
+      <div class="card">${p.tomorrow.lines.map(l => '<p>' + esc(l) + '</p>').join('')}</div>
+      <button class="btn" id="pushHevy">→ Send tomorrow to Hevy</button>
+      <div id="pushResult"></div>` : ''}
       <h2>Working weights</h2>
       <div class="card" style="padding:8px 12px">
         <table>
@@ -209,6 +211,23 @@ async function renderPlan() {
           </tr>`).join('')}
         </table>
       </div>`;
+    const pb = document.getElementById('pushHevy');
+    if (pb) pb.onclick = async () => {
+      pb.disabled = true; pb.textContent = 'Sending…';
+      try {
+        const r = await api('/hevy/routine', { method: 'POST' });
+        document.getElementById('pushResult').innerHTML = '<div class="card" style="margin-top:12px">' +
+          (r.skipped ? esc(r.skipped)
+                     : '✅ <b>' + esc(r.created) + '</b> is in Hevy (Coach folder)' +
+                       (r.unmatched?.length ? '<br>⚠️ No Hevy match for: ' + esc(r.unmatched.join(', ')) : '')) +
+          '</div>';
+        pb.textContent = r.skipped ? '→ Send tomorrow to Hevy' : 'Sent ✓';
+        if (r.skipped) pb.disabled = false;
+      } catch (e) {
+        document.getElementById('pushResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(e.message) + '</div>';
+        pb.disabled = false; pb.textContent = '→ Send tomorrow to Hevy';
+      }
+    };
   } catch (e) {
     view.innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
   }

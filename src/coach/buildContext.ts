@@ -23,7 +23,7 @@ export function gateFor(recoveryPct: number | null): string {
 
 export async function buildContext(): Promise<string> {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = now.toLocaleDateString('en-CA'); // local date (TZ from .env), not UTC
 
   const plan = await one(`SELECT * FROM plan_state WHERE id = 1`);
   const whoopWeek = await q(

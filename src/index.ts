@@ -17,6 +17,7 @@ import { authorizeUrl, handleCallback } from './services/whoopAuth.js';
 import { syncWhoop } from './services/whoopSync.js';
 import { syncHevy } from './services/hevySync.js';
 import { applyProgression } from './services/progression.js';
+import { pushTomorrowRoutine } from './services/hevyRoutine.js';
 
 const app = express();
 app.use(express.json());
@@ -51,6 +52,14 @@ app.post('/sync/whoop', async (_req, res) => {
 app.post('/sync/hevy', async (_req, res) => {
   try {
     res.json({ synced: await syncHevy() });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/hevy/routine', async (_req, res) => {
+  try {
+    res.json(await pushTomorrowRoutine());
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
