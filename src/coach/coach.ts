@@ -56,6 +56,56 @@ export async function morningCheckin(force = false): Promise<string> {
   return reply;
 }
 
+export interface PlannedExercise {
+  name: string;
+  sets: number;
+  reps: number;
+  weight_lbs: number | null;
+  superset: string | null;
+  note: string | null;
+}
+export interface PlannedSession {
+  lifting: boolean;
+  slot?: string;
+  exercises?: PlannedExercise[];
+}
+
+/**
+ * Ask the coach to plan tomorrow's lifting session as structured data —
+ * this is what gets written into Hevy, so the coach (not a static
+ * template) owns exercise selection, supersets, and loads.
+ */
+export async function planTomorrowSession(): Promise<PlannedSession> {
+  // Recent chat rides along — if a session was already agreed on in
+  // conversation, the plan must match it, not re-derive from scratch.
+  const history = await q<{ role: string; content: string }>(
+    `SELECT role, content FROM (
+       SELECT id, role, content FROM coach_messages
+       WHERE role IN ('user','assistant')
+       ORDER BY id DESC LIMIT 20
+     ) recent ORDER BY id`
+  );
+  const raw = await callCoach([
+    ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    {
+      role: 'user',
+      content:
+        'Plan TOMORROW\'s lifting session. Output ONLY JSON, no prose, schema: ' +
+        '{"lifting": boolean, "slot": string, "exercises": [{"name": string, "sets": number, ' +
+        '"reps": number, "weight_lbs": number|null, "superset": string|null, "note": string|null}]}. ' +
+        'Rules: apply the weekly structure, the WHOOP gate, and the working weights from context. ' +
+        'reps is per set (for unilateral work it means per leg — say so in note). ' +
+        'weight_lbs: your best call in pounds; null only if genuinely unknown. ' +
+        'superset: shared label ("A", "B") for paired accessories, else null. ' +
+        'Recent conversation counts: if a session plan was already agreed in chat, output THAT. ' +
+        'If tomorrow is an aerobic or rest day, output {"lifting": false}.',
+    },
+  ]);
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Coach did not return JSON: ' + raw.slice(0, 200));
+  return JSON.parse(match[0]);
+}
+
 /** Free-form chat with the same brain. Recent history rides along. */
 export async function chat(message: string): Promise<string> {
   const history = await q<{ role: string; content: string }>(

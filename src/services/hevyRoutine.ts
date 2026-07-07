@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { hevy, LBS_TO_KG } from '../lib/hevy.js';
 import { one, q } from '../lib/db.js';
 import { TEMPLATE_BY_DOW, prescriptionFor } from './progression.js';
+import { planTomorrowSession } from '../coach/coach.js';
 
 // Spec names → Hevy catalog titles, for where they obviously differ.
 const ALIASES: Record<string, string> = {
@@ -67,16 +68,51 @@ function resolve(name: string, map: Map<string, Template>): Template | null {
     const hit = map.get(norm(candidate));
     if (hit) return hit;
   }
-  // Fallback: shortest template title containing every word of the name.
+  // Fuzzy fallback: most-overlapping title (either direction), ties to the
+  // shortest. "Barbell Back Squat" ↔ "Squat (Barbell)" both resolve.
   const tokens = norm(ALIASES[name] ?? name).split(' ');
-  let best: (Template & { len: number }) | null = null;
+  let best: { t: Template; score: number; len: number } | null = null;
   for (const [key, val] of map) {
     const ktok = key.split(' ');
-    if (tokens.every((t) => ktok.includes(t)) && (!best || ktok.length < best.len)) {
-      best = { ...val, len: ktok.length };
+    const overlap = tokens.filter((t) => ktok.includes(t)).length;
+    if (overlap < 2 || overlap < Math.min(tokens.length, ktok.length)) continue;
+    if (!best || overlap > best.score || (overlap === best.score && ktok.length < best.len)) {
+      best = { t: val, score: overlap, len: ktok.length };
     }
   }
-  return best;
+  return best?.t ?? null;
+}
+
+// One exercise line of a session plan, wherever it came from.
+type Spec = {
+  name: string;
+  sets: number;
+  reps: number;
+  weight_lbs: number | null;
+  superset?: string | null;
+  note?: string | null;
+  rest?: number;
+};
+
+// Fallback when the coach plan fails: the static weekly template.
+async function staticSpec(): Promise<{ slot: string; items: Spec[] } | null> {
+  const tomorrow = new Date(Date.now() + 86_400_000);
+  const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
+  if (!template) return null;
+  const items: Spec[] = [];
+  for (const name of template.exercises) {
+    const w = await one(`SELECT * FROM working_weights WHERE exercise = $1`, [name]);
+    const p = prescriptionFor(w, template.kind);
+    items.push({
+      name,
+      sets: p.sets,
+      reps: p.reps,
+      weight_lbs: w?.weight_lbs != null ? Number(w.weight_lbs) : null,
+      note: w?.note ?? null,
+      rest: p.rest,
+    });
+  }
+  return { slot: template.slot, items };
 }
 
 async function coachFolderId(): Promise<number | null> {
@@ -91,41 +127,64 @@ async function coachFolderId(): Promise<number | null> {
 }
 
 export async function pushTomorrowRoutine(): Promise<any> {
-  const tomorrow = new Date(Date.now() + 86_400_000);
-  const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
-  if (!template) {
-    return { skipped: 'Tomorrow is an aerobic/recovery day — no Hevy routine to write.' };
+  // The coach plans the session; the static template is only a fallback.
+  let slot: string;
+  let items: Spec[];
+  let source = 'coach';
+  let planError: string | null = null;
+
+  try {
+    const plan = await planTomorrowSession();
+    if (plan.lifting === false) {
+      return { skipped: 'Coach: tomorrow is an aerobic/recovery day — nothing to write to Hevy.' };
+    }
+    if (!plan.exercises?.length) throw new Error('coach plan had no exercises');
+    slot = plan.slot ?? 'Session';
+    items = plan.exercises;
+  } catch (e: any) {
+    planError = e.message;
+    const st = await staticSpec();
+    if (!st) return { skipped: 'Tomorrow is an aerobic/recovery day — no Hevy routine to write.' };
+    slot = st.slot;
+    items = st.items;
+    source = 'static template (coach plan failed)';
   }
 
   const map = await templateMap();
   const exercises: any[] = [];
+  const matched: { name: string; hevy: string }[] = [];
   const unmatched: string[] = [];
+  const supersetIds = new Map<string, number>();
 
-  for (const name of template.exercises) {
-    const w = await one(`SELECT * FROM working_weights WHERE exercise = $1`, [name]);
-    const t = resolve(name, map);
+  for (const it of items) {
+    const t = resolve(it.name, map);
     if (!t) {
-      unmatched.push(name);
+      unmatched.push(it.name);
       continue;
     }
-    const p = prescriptionFor(w, template.kind);
-    const lbs = w?.weight_lbs != null ? Number(w.weight_lbs) : null;
+    matched.push({ name: it.name, hevy: t.title });
+    let superset_id: number | null = null;
+    if (it.superset) {
+      if (!supersetIds.has(it.superset)) supersetIds.set(it.superset, supersetIds.size);
+      superset_id = supersetIds.get(it.superset)!;
+    }
     exercises.push({
       exercise_template_id: t.id,
-      superset_id: null,
-      rest_seconds: p.rest,
-      notes: w?.note ?? (lbs == null ? 'calibration — find the RPE 7-8 weight' : null),
-      sets: Array.from({ length: p.sets }, () => ({
+      superset_id,
+      rest_seconds: it.rest ?? 120,
+      notes: it.note ?? (it.weight_lbs == null ? 'calibration — find the RPE 7-8 weight' : null),
+      sets: Array.from({ length: it.sets }, () => ({
         type: 'normal',
-        weight_kg: lbs != null ? Math.round(lbs * LBS_TO_KG * 100) / 100 : null,
-        reps: p.reps,
+        weight_kg: it.weight_lbs != null ? Math.round(it.weight_lbs * LBS_TO_KG * 100) / 100 : null,
+        reps: it.reps,
       })),
     });
   }
 
-  if (!exercises.length) return { error: 'No exercises matched Hevy templates', unmatched };
+  if (!exercises.length) return { error: 'No exercises matched Hevy templates', unmatched, planError };
 
-  const title = `Coach: ${template.slot} — ${tomorrow.toLocaleDateString('en-CA')}`;
+  const tomorrow = new Date(Date.now() + 86_400_000);
+  const title = `Coach: ${slot} — ${tomorrow.toLocaleDateString('en-CA')}`;
   const folder_id = await coachFolderId().catch(() => null);
   const res = await hevy('/routines', {
     method: 'POST',
@@ -133,12 +192,12 @@ export async function pushTomorrowRoutine(): Promise<any> {
       routine: {
         title,
         folder_id,
-        notes: 'Written by the coach from working weights. RPE governs on the day.',
+        notes: 'Written by the coach. RPE governs on the day.',
         exercises,
       },
     }),
   });
-  return { created: title, exercises: exercises.length, unmatched, routine: res.routine ?? res };
+  return { created: title, source, planError, matched, unmatched, routine: res.routine ?? res };
 }
 
 // Run directly: npm run routine:push
