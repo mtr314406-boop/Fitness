@@ -120,10 +120,11 @@ async function renderToday(refresh = false) {
       </div>
       <h2>The call</h2>
       <div class="card call">${md(t.call)}</div>
-      <div class="row">
+      <div class="row" style="flex-wrap:wrap">
         <button class="btn ghost" id="refresh">↻ New check-in</button>
         <button class="btn ghost" id="sync">⇅ WHOOP</button>
         <button class="btn ghost" id="syncHevy">🏋️ Sync workout</button>
+        <button class="btn ghost" id="pushToday">✎ Today → Hevy</button>
       </div>
       <div id="syncResult"></div>
       <h2 style="margin-top:24px">Reply</h2>
@@ -134,6 +135,22 @@ async function renderToday(refresh = false) {
       e.target.disabled = true; e.target.textContent = 'Syncing…';
       try { await api('/sync/whoop', { method: 'POST' }); renderToday(); }
       catch (err) { e.target.textContent = 'Sync failed'; console.error(err); }
+    };
+    document.getElementById('pushToday').onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Planning…';
+      try {
+        const r = await api('/hevy/routine?day=today', { method: 'POST' });
+        document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
+          (r.skipped ? esc(r.skipped)
+                     : '✅ <b>' + esc(r.created) + '</b> is in Hevy — delete any older routine for today.' +
+                       (r.unmatched?.length ? '<br>⚠️ No Hevy match for: ' + esc(r.unmatched.join(', ')) : '')) +
+          '</div>';
+        e.target.textContent = r.skipped ? '✎ Today → Hevy' : 'Sent ✓';
+        if (r.skipped) e.target.disabled = false;
+      } catch (err) {
+        document.getElementById('syncResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
+        e.target.disabled = false; e.target.textContent = '✎ Today → Hevy';
+      }
     };
     document.getElementById('syncHevy').onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = 'Syncing…';

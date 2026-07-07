@@ -96,9 +96,8 @@ type Spec = {
 };
 
 // Fallback when the coach plan fails: the static weekly template.
-async function staticSpec(): Promise<{ slot: string; items: Spec[] } | null> {
-  const tomorrow = new Date(Date.now() + 86_400_000);
-  const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
+async function staticSpec(target: Date): Promise<{ slot: string; items: Spec[] } | null> {
+  const template = TEMPLATE_BY_DOW[target.getDay()];
   if (!template) return null;
   const items: Spec[] = [];
   for (const name of template.exercises) {
@@ -127,14 +126,15 @@ async function coachFolderId(): Promise<number | null> {
   return created.routine_folder?.id ?? created.id ?? null;
 }
 
-export async function pushTomorrowRoutine(): Promise<any> {
-  // The CALENDAR decides whether tomorrow is a lifting day — the coach
-  // only fills in the session. (Chat history once talked it into the
-  // wrong day; never again.)
-  const tomorrow = new Date(Date.now() + 86_400_000);
-  const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
+/** dayOffset 0 = today (morning-of adjustments), 1 = tomorrow (default). */
+export async function pushRoutine(dayOffset = 1): Promise<any> {
+  // The CALENDAR decides whether it's a lifting day — the coach only
+  // fills in the session. (Chat history once talked it into the wrong
+  // day; never again.)
+  const target = new Date(Date.now() + dayOffset * 86_400_000);
+  const template = TEMPLATE_BY_DOW[target.getDay()];
   if (!template) {
-    return { skipped: `Tomorrow (${tomorrow.toLocaleDateString('en-CA')}) is an aerobic/recovery day — no Hevy routine to write.` };
+    return { skipped: `${target.toLocaleDateString('en-CA')} is an aerobic/recovery day — no Hevy routine to write.` };
   }
 
   let slot: string;
@@ -144,8 +144,8 @@ export async function pushTomorrowRoutine(): Promise<any> {
 
   try {
     const plan = await planSession(
-      tomorrow.toLocaleDateString('en-CA'),
-      tomorrow.toLocaleDateString('en-US', { weekday: 'long' }),
+      target.toLocaleDateString('en-CA'),
+      target.toLocaleDateString('en-US', { weekday: 'long' }),
       template.slot
     );
     if (!plan.exercises?.length) throw new Error('coach plan had no exercises');
@@ -153,8 +153,8 @@ export async function pushTomorrowRoutine(): Promise<any> {
     items = plan.exercises;
   } catch (e: any) {
     planError = e.message;
-    const st = await staticSpec();
-    if (!st) return { skipped: 'Tomorrow is an aerobic/recovery day — no Hevy routine to write.' };
+    const st = await staticSpec(target);
+    if (!st) return { skipped: 'Aerobic/recovery day — no Hevy routine to write.' };
     slot = st.slot;
     items = st.items;
     source = 'static template (coach plan failed)';
@@ -193,7 +193,7 @@ export async function pushTomorrowRoutine(): Promise<any> {
 
   if (!exercises.length) return { error: 'No exercises matched Hevy templates', unmatched, planError };
 
-  const title = `Coach: ${slot} — ${tomorrow.toLocaleDateString('en-CA')}`;
+  const title = `Coach: ${slot} — ${target.toLocaleDateString('en-CA')}`;
   const folder_id = await coachFolderId().catch(() => null);
   const res = await hevy('/routines', {
     method: 'POST',
@@ -206,18 +206,18 @@ export async function pushTomorrowRoutine(): Promise<any> {
       },
     }),
   });
-  // Persist the plan so /plan (and tomorrow's context) shows what was
+  // Persist the plan so /plan (and the coach's context) shows what was
   // actually written to Hevy, not the default template.
   await q(`INSERT INTO coach_messages (role, kind, content) VALUES ('assistant', 'plan', $1)`, [
-    JSON.stringify({ date: tomorrow.toLocaleDateString('en-CA'), slot, items }),
+    JSON.stringify({ date: target.toLocaleDateString('en-CA'), slot, items }),
   ]);
 
   return { created: title, source, planError, matched, unmatched, routine: res.routine ?? res };
 }
 
-// Run directly: npm run routine:push
+// Run directly: npm run routine:push (tomorrow) / npm run routine:push today
 if (process.argv[1]?.endsWith('hevyRoutine.ts')) {
-  pushTomorrowRoutine()
+  pushRoutine(process.argv[2] === 'today' ? 0 : 1)
     .then((r) => {
       console.log(JSON.stringify(r, null, 2));
       process.exit(0);
