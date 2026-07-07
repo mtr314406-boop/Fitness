@@ -41,6 +41,22 @@ const COACH_TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: {} },
   },
   {
+    name: 'set_aet_ceiling',
+    description:
+      'Record the AeT (Zone 2 HR ceiling) from a completed drift test. Only after a valid test (drift <5%).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        aet_hr: { type: 'number' },
+        test_incline: { type: 'number' },
+        test_speed: { type: 'number' },
+        drift_pct: { type: 'number' },
+        note: { type: 'string' },
+      },
+      required: ['aet_hr'],
+    },
+  },
+  {
     name: 'update_working_weight',
     description:
       'Set a working weight and/or note for one exercise (calibration results, coaching decisions). ' +
@@ -94,6 +110,14 @@ async function runTool(name: string, input: any): Promise<string> {
     case 'apply_progression': {
       const { applyProgression } = await import('../services/progression.js');
       return JSON.stringify({ moved: await applyProgression() });
+    }
+    case 'set_aet_ceiling': {
+      await q(
+        `INSERT INTO aet_ceiling (set_on, aet_hr, test_incline, test_speed, drift_pct, note)
+         VALUES (CURRENT_DATE, $1, $2, $3, $4, $5)`,
+        [input.aet_hr, input.test_incline ?? null, input.test_speed ?? null, input.drift_pct ?? null, input.note ?? null]
+      );
+      return `AeT ceiling set: ${input.aet_hr} bpm.`;
     }
     case 'update_working_weight': {
       const rows = await q(
