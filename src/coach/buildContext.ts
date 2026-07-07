@@ -34,9 +34,14 @@ export async function buildContext(): Promise<string> {
   const aet = await one(`SELECT * FROM aet_ceiling ORDER BY set_on DESC, id DESC LIMIT 1`);
   const weights = await q(`SELECT * FROM working_weights ORDER BY muscle_group, exercise`);
   const sessions = await q(
-    `SELECT id, day, title, slot, total_sets, total_volume, notes
+    `SELECT id, day, title, slot, total_sets, total_volume, notes,
+            raw->>'start_time' AS start_time, raw->>'end_time' AS end_time
      FROM workout_sessions ORDER BY day DESC LIMIT 6`
   );
+  // WHOOP-recorded activities (for strain overlay + cardio detail).
+  const whoopWorkouts = await q(
+    `SELECT * FROM whoop_workouts ORDER BY start_at DESC LIMIT 20`
+  ).catch(() => [] as any[]); // table appears on first activity sync
   const sets = sessions.length
     ? await q(
         `SELECT session_id, exercise, weight_lbs, reps, rpe
@@ -113,7 +118,18 @@ export async function buildContext(): Promise<string> {
   lines.push(`# RECENT LIFTING (last ${sessions.length} sessions)`);
   if (!sessions.length) lines.push('None synced yet.');
   for (const s of sessions) {
-    lines.push(`${fmtDay(s.day)} — ${s.title ?? s.slot} (${s.total_sets} sets, ${s.total_volume ?? '?'} lb volume)`);
+    // WHOOP activity overlapping this session = its cardiovascular cost.
+    const ww = s.start_time && s.end_time
+      ? whoopWorkouts.find(
+          (x: any) =>
+            new Date(x.start_at).getTime() < new Date(s.end_time).getTime() + 30 * 60_000 &&
+            new Date(x.end_at).getTime() > new Date(s.start_time).getTime() - 30 * 60_000
+        )
+      : null;
+    lines.push(
+      `${fmtDay(s.day)} — ${s.title ?? s.slot} (${s.total_sets} sets, ${s.total_volume ?? '?'} lb volume)` +
+        (ww ? ` [WHOOP: strain ${ww.strain ?? '?'}, avg HR ${ww.avg_hr ?? '?'}, max HR ${ww.max_hr ?? '?'}]` : '')
+    );
     const bySession = sets.filter((x) => x.session_id === s.id);
     const byExercise = new Map<string, string[]>();
     for (const x of bySession) {

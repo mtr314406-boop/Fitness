@@ -65,7 +65,9 @@ async function runTool(name: string, input: any): Promise<string> {
     }
     case 'sync_hevy': {
       const { syncHevy } = await import('../services/hevySync.js');
+      const { syncWhoopWorkouts } = await import('../services/whoopSync.js');
       const n = await syncHevy();
+      await syncWhoopWorkouts(2).catch(() => {}); // strain for the session that just ended
       const s = await one(
         `SELECT id, day, title, total_sets, total_volume FROM workout_sessions
          ORDER BY day DESC, synced_at DESC LIMIT 1`

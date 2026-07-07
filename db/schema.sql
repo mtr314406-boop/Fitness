@@ -18,6 +18,20 @@ CREATE TABLE IF NOT EXISTS whoop_daily (
   synced_at       TIMESTAMPTZ DEFAULT now()
 );
 
+-- --- WHOOP-recorded activities (strain per workout; synced with recovery) ---
+CREATE TABLE IF NOT EXISTS whoop_workouts (
+  id          TEXT PRIMARY KEY,
+  start_at    TIMESTAMPTZ,
+  end_at      TIMESTAMPTZ,
+  sport       TEXT,
+  strain      NUMERIC,
+  avg_hr      INTEGER,
+  max_hr      INTEGER,
+  kilojoules  NUMERIC,
+  raw         JSONB,
+  synced_at   TIMESTAMPTZ DEFAULT now()
+);
+
 -- --- WHOOP OAuth tokens (single user) ---
 CREATE TABLE IF NOT EXISTS whoop_tokens (
   id              INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),

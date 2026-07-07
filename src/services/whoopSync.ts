@@ -73,7 +73,75 @@ export async function syncWhoop(days = 7): Promise<number> {
     );
     synced++;
   }
+
+  // Activities ride along with every recovery sync.
+  await syncWhoopWorkouts(days).catch((e) => console.error('whoop workouts sync failed:', e.message));
+
   return synced;
+}
+
+// --- WHOOP activities (the workouts WHOOP itself recorded) ---
+// Lifting sessions get matched to Hevy by time overlap in buildContext;
+// cardio activities auto-populate cardio_sessions (deduped by whoop id).
+
+const CARDIO_SPORTS = new Set([
+  'walking', 'hiking', 'running', 'cycling', 'spinning', 'elliptical',
+  'stairmaster', 'rowing', 'swimming', 'mountain biking', 'ruck',
+]);
+
+export async function syncWhoopWorkouts(days = 7): Promise<number> {
+  await q(`CREATE TABLE IF NOT EXISTS whoop_workouts (
+    id          TEXT PRIMARY KEY,
+    start_at    TIMESTAMPTZ,
+    end_at      TIMESTAMPTZ,
+    sport       TEXT,
+    strain      NUMERIC,
+    avg_hr      INTEGER,
+    max_hr      INTEGER,
+    kilojoules  NUMERIC,
+    raw         JSONB,
+    synced_at   TIMESTAMPTZ DEFAULT now()
+  )`);
+
+  const start = new Date(Date.now() - days * 86_400_000).toISOString();
+  const records = (await whoopGet(`/activity/workout?start=${start}&limit=25`)).records ?? [];
+
+  let n = 0;
+  for (const w of records) {
+    const sport = (w.sport_name ?? String(w.sport_id ?? 'unknown')).toLowerCase();
+    await q(
+      `INSERT INTO whoop_workouts (id, start_at, end_at, sport, strain, avg_hr, max_hr, kilojoules, raw, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+       ON CONFLICT (id) DO UPDATE SET
+         sport = EXCLUDED.sport, strain = EXCLUDED.strain, avg_hr = EXCLUDED.avg_hr,
+         max_hr = EXCLUDED.max_hr, kilojoules = EXCLUDED.kilojoules,
+         raw = EXCLUDED.raw, synced_at = now()`,
+      [
+        w.id, w.start, w.end, sport,
+        w.score?.strain != null ? Math.round(w.score.strain * 10) / 10 : null,
+        w.score?.average_heart_rate ?? null,
+        w.score?.max_heart_rate ?? null,
+        w.score?.kilojoule != null ? Math.round(w.score.kilojoule) : null,
+        JSON.stringify(w),
+      ]
+    );
+    n++;
+
+    if (CARDIO_SPORTS.has(sport)) {
+      const tag = `whoop:${w.id}`;
+      const exists = await q(`SELECT 1 FROM cardio_sessions WHERE note LIKE $1`, [`%${tag}%`]);
+      if (!exists.length) {
+        const day = new Date(w.start).toLocaleDateString('en-CA');
+        const durationMin = Math.round((new Date(w.end).getTime() - new Date(w.start).getTime()) / 60_000);
+        await q(
+          `INSERT INTO cardio_sessions (day, modality, duration_min, avg_hr, note)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [day, sport, durationMin, w.score?.average_heart_rate ?? null, tag]
+        );
+      }
+    }
+  }
+  return n;
 }
 
 // Run directly: npm run sync:whoop

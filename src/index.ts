@@ -15,7 +15,7 @@ import { todayRouter } from './routes/today.js';
 import { chatRouter } from './routes/chat.js';
 import { planRouter } from './routes/plan.js';
 import { authorizeUrl, handleCallback } from './services/whoopAuth.js';
-import { syncWhoop } from './services/whoopSync.js';
+import { syncWhoop, syncWhoopWorkouts } from './services/whoopSync.js';
 import { syncHevy } from './services/hevySync.js';
 import { applyProgression } from './services/progression.js';
 import { pushRoutine } from './services/hevyRoutine.js';
@@ -53,7 +53,10 @@ app.post('/sync/whoop', async (_req, res) => {
 
 app.post('/sync/hevy', async (_req, res) => {
   try {
-    res.json({ synced: await syncHevy() });
+    const synced = await syncHevy();
+    // Grab the WHOOP activity for the session that likely just ended.
+    await syncWhoopWorkouts(2).catch(() => {});
+    res.json({ synced });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
