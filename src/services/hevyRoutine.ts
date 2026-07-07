@@ -197,6 +197,12 @@ export async function pushTomorrowRoutine(): Promise<any> {
       },
     }),
   });
+  // Persist the plan so /plan (and tomorrow's context) shows what was
+  // actually written to Hevy, not the default template.
+  await q(`INSERT INTO coach_messages (role, kind, content) VALUES ('assistant', 'plan', $1)`, [
+    JSON.stringify({ date: tomorrow.toLocaleDateString('en-CA'), slot, items }),
+  ]);
+
   return { created: title, source, planError, matched, unmatched, routine: res.routine ?? res };
 }
 

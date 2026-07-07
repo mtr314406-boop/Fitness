@@ -104,8 +104,34 @@ export function prescriptionFor(
   return kind === 'strength' ? { sets: 3, reps: 8, rest: 120 } : { sets: 3, reps: 12, rest: 90 };
 }
 
-export async function buildTomorrowPlan(): Promise<{ slot: string; lines: string[] } | null> {
+export async function buildTomorrowPlan(): Promise<{ slot: string; lines: string[]; source: 'coach' | 'template' } | null> {
   const tomorrow = new Date(Date.now() + 86_400_000);
+
+  // Prefer the coach's stored plan (written by the Hevy push) when it's
+  // actually for tomorrow; the weekly template is only the default.
+  const stored = await one<{ content: string }>(
+    `SELECT content FROM coach_messages WHERE kind = 'plan' ORDER BY id DESC LIMIT 1`
+  );
+  if (stored) {
+    try {
+      const p = JSON.parse(stored.content);
+      if (p.date === tomorrow.toLocaleDateString('en-CA') && p.items?.length) {
+        return {
+          slot: p.slot,
+          source: 'coach',
+          lines: p.items.map(
+            (it: any) =>
+              `${it.name}: ${it.sets}x${it.reps}${it.superset ? ` (SS-${it.superset})` : ''}` +
+              ` @ ${it.weight_lbs ?? 'CALIBRATE'} lb` +
+              (it.note ? ` — ${it.note}` : '')
+          ),
+        };
+      }
+    } catch {
+      // unparseable stored plan — fall through to the template
+    }
+  }
+
   const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
   if (!template) return null; // aerobic day — no Hevy routine
 
@@ -120,5 +146,5 @@ export async function buildTomorrowPlan(): Promise<{ slot: string; lines: string
         ` — progress by ${w.progression}`
     );
   }
-  return { slot: template.slot, lines };
+  return { slot: template.slot, lines, source: 'template' };
 }

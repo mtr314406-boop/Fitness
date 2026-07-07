@@ -197,7 +197,11 @@ async function renderPlan() {
       <h2>The week</h2>
       <div class="card">${p.week.map(d => '<p>' + esc(d) + '</p>').join('')}</div>
       ${p.tomorrow ? `<h2>Tomorrow: ${esc(p.tomorrow.slot)}</h2>
-      <div class="card">${p.tomorrow.lines.map(l => '<p>' + esc(l) + '</p>').join('')}</div>
+      <div class="card">${p.tomorrow.lines.map(l => '<p>' + esc(l) + '</p>').join('')}
+        <p class="muted" style="margin-top:8px">${p.tomorrow.source === 'coach'
+          ? "The coach's plan — this is what went to Hevy."
+          : "Default template — Send to Hevy gets the coach's real plan."}</p>
+      </div>
       <button class="btn" id="pushHevy">→ Send tomorrow to Hevy</button>
       <div id="pushResult"></div>` : ''}
       <h2>Working weights</h2>
