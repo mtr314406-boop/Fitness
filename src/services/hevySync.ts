@@ -60,11 +60,12 @@ export async function syncHevy(pages = 3): Promise<number> {
       const sets: { exercise: string; idx: number; lbs: number | null; reps: number | null; rpe: number | null }[] = [];
       for (const ex of w.exercises ?? []) {
         for (const s of ex.sets ?? []) {
-          if (s.type === 'warmup') continue;
           const lbs = toLbs(s.weight_kg);
+          // Volume matches Hevy's convention: every set counts.
+          if (lbs && s.reps) totalVolume += lbs * s.reps;
+          if (s.type === 'warmup') continue; // working sets only below
           sets.push({ exercise: ex.title, idx: s.index, lbs, reps: s.reps ?? null, rpe: s.rpe ?? null });
           totalSets++;
-          if (lbs && s.reps) totalVolume += lbs * s.reps;
         }
       }
 
