@@ -158,7 +158,11 @@ async function renderToday(refresh = false) {
     document.getElementById('sync').onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = 'Syncing…';
       try { await api('/sync/whoop', { method: 'POST' }); renderToday(); }
-      catch (err) { e.target.textContent = 'Sync failed'; console.error(err); }
+      catch (err) {
+        document.getElementById('syncResult').innerHTML =
+          '<div class="card err" style="margin-top:12px">WHOOP sync: ' + esc(err.message) + '</div>';
+        e.target.disabled = false; e.target.textContent = '⇅ WHOOP';
+      }
     };
     document.getElementById('pushToday').onclick = async (e) => {
       e.target.disabled = true; e.target.textContent = 'Planning…';
