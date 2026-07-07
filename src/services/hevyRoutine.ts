@@ -9,7 +9,7 @@ process.env.TZ ||= 'America/Denver';
 import { hevy, LBS_TO_KG } from '../lib/hevy.js';
 import { one, q } from '../lib/db.js';
 import { TEMPLATE_BY_DOW, prescriptionFor } from './progression.js';
-import { planTomorrowSession } from '../coach/coach.js';
+import { planSession } from '../coach/coach.js';
 
 // Spec names → Hevy catalog titles, for where they obviously differ.
 const ALIASES: Record<string, string> = {
@@ -128,19 +128,28 @@ async function coachFolderId(): Promise<number | null> {
 }
 
 export async function pushTomorrowRoutine(): Promise<any> {
-  // The coach plans the session; the static template is only a fallback.
+  // The CALENDAR decides whether tomorrow is a lifting day — the coach
+  // only fills in the session. (Chat history once talked it into the
+  // wrong day; never again.)
+  const tomorrow = new Date(Date.now() + 86_400_000);
+  const template = TEMPLATE_BY_DOW[tomorrow.getDay()];
+  if (!template) {
+    return { skipped: `Tomorrow (${tomorrow.toLocaleDateString('en-CA')}) is an aerobic/recovery day — no Hevy routine to write.` };
+  }
+
   let slot: string;
   let items: Spec[];
   let source = 'coach';
   let planError: string | null = null;
 
   try {
-    const plan = await planTomorrowSession();
-    if (plan.lifting === false) {
-      return { skipped: 'Coach: tomorrow is an aerobic/recovery day — nothing to write to Hevy.' };
-    }
+    const plan = await planSession(
+      tomorrow.toLocaleDateString('en-CA'),
+      tomorrow.toLocaleDateString('en-US', { weekday: 'long' }),
+      template.slot
+    );
     if (!plan.exercises?.length) throw new Error('coach plan had no exercises');
-    slot = plan.slot ?? 'Session';
+    slot = plan.slot ?? template.slot;
     items = plan.exercises;
   } catch (e: any) {
     planError = e.message;
@@ -184,7 +193,6 @@ export async function pushTomorrowRoutine(): Promise<any> {
 
   if (!exercises.length) return { error: 'No exercises matched Hevy templates', unmatched, planError };
 
-  const tomorrow = new Date(Date.now() + 86_400_000);
   const title = `Coach: ${slot} — ${tomorrow.toLocaleDateString('en-CA')}`;
   const folder_id = await coachFolderId().catch(() => null);
   const res = await hevy('/routines', {

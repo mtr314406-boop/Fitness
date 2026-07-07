@@ -71,11 +71,12 @@ export interface PlannedSession {
 }
 
 /**
- * Ask the coach to plan tomorrow's lifting session as structured data —
- * this is what gets written into Hevy, so the coach (not a static
- * template) owns exercise selection, supersets, and loads.
+ * Ask the coach to fill in a specific lifting session as structured data —
+ * this is what gets written into Hevy. WHICH day it is (and whether it's
+ * a lifting day at all) is decided by the caller from the calendar; the
+ * coach owns exercise selection, supersets, and loads.
  */
-export async function planTomorrowSession(): Promise<PlannedSession> {
+export async function planSession(date: string, weekday: string, slot: string): Promise<PlannedSession> {
   // Recent chat rides along — if a session was already agreed on in
   // conversation, the plan must match it, not re-derive from scratch.
   const history = await q<{ role: string; content: string }>(
@@ -90,15 +91,16 @@ export async function planTomorrowSession(): Promise<PlannedSession> {
     {
       role: 'user',
       content:
-        'Plan TOMORROW\'s lifting session. Output ONLY JSON, no prose, schema: ' +
-        '{"lifting": boolean, "slot": string, "exercises": [{"name": string, "sets": number, ' +
+        `Write the lifting session for ${date} (${weekday}) — the scheduled slot is: ${slot}. ` +
+        'This date and slot are authoritative (from the calendar) — if anything in our conversation ' +
+        'implies a different day, trust THIS. Output ONLY JSON, no prose, schema: ' +
+        '{"lifting": true, "slot": string, "exercises": [{"name": string, "sets": number, ' +
         '"reps": number, "weight_lbs": number|null, "superset": string|null, "note": string|null}]}. ' +
-        'Rules: apply the weekly structure, the WHOOP gate, and the working weights from context. ' +
+        'Rules: apply the WHOOP gate and the working weights from context. ' +
+        'If a session plan for this slot was already agreed in chat, output exactly that plan. ' +
         'reps is per set (for unilateral work it means per leg — say so in note). ' +
         'weight_lbs: your best call in pounds; null only if genuinely unknown. ' +
-        'superset: shared label ("A", "B") for paired accessories, else null. ' +
-        'Recent conversation counts: if a session plan was already agreed in chat, output THAT. ' +
-        'If tomorrow is an aerobic or rest day, output {"lifting": false}.',
+        'superset: shared label ("A", "B") for paired accessories, else null.',
     },
   ]);
   const match = raw.match(/\{[\s\S]*\}/);
