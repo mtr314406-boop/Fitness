@@ -21,12 +21,34 @@ const SLOT_BY_DOW: Record<number, string> = {
 const toLbs = (kg: number | null | undefined) =>
   kg == null ? null : Math.round(kg * KG_TO_LBS * 10) / 10;
 
-/** Sync the most recent `pages` pages of workouts (10 per page). */
-export async function syncHevy(pages = 3): Promise<number> {
-  let synced = 0;
+const newestStart = (ws: any[]) =>
+  ws.reduce((m, w) => (w.start_time > m ? w.start_time : m), '');
 
-  for (let page = 1; page <= pages; page++) {
-    const data = await hevy(`/workouts?page=${page}&pageSize=10`);
+/**
+ * Sync the most recent `pages` pages of workouts (10 per page).
+ * Hevy pages oldest-first, so with a big history the newest sessions
+ * live on the LAST pages — detect the ordering and pull from that end.
+ */
+export async function syncHevy(pages = 3): Promise<number> {
+  const first = await hevy(`/workouts?page=1&pageSize=10`);
+  const pageCount = first.page_count ?? 1;
+  const cache = new Map<number, any>([[1, first]]);
+
+  let pageNums: number[];
+  if (pageCount <= pages) {
+    pageNums = Array.from({ length: pageCount }, (_, i) => i + 1);
+  } else {
+    const last = await hevy(`/workouts?page=${pageCount}&pageSize=10`);
+    cache.set(pageCount, last);
+    const newestFirst = newestStart(first.workouts ?? []) >= newestStart(last.workouts ?? []);
+    pageNums = newestFirst
+      ? Array.from({ length: pages }, (_, i) => i + 1)
+      : Array.from({ length: pages }, (_, i) => pageCount - pages + 1 + i);
+  }
+
+  let synced = 0;
+  for (const page of pageNums) {
+    const data = cache.get(page) ?? (await hevy(`/workouts?page=${page}&pageSize=10`));
     const workouts = data.workouts ?? [];
 
     for (const w of workouts) {
@@ -68,7 +90,6 @@ export async function syncHevy(pages = 3): Promise<number> {
       synced++;
     }
 
-    if (page >= (data.page_count ?? 1)) break;
   }
   return synced;
 }
