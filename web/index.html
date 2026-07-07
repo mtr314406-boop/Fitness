@@ -122,8 +122,10 @@ async function renderToday(refresh = false) {
       <div class="card call">${md(t.call)}</div>
       <div class="row">
         <button class="btn ghost" id="refresh">↻ New check-in</button>
-        <button class="btn ghost" id="sync">⇅ Sync WHOOP</button>
+        <button class="btn ghost" id="sync">⇅ WHOOP</button>
+        <button class="btn ghost" id="syncHevy">🏋️ Sync workout</button>
       </div>
+      <div id="syncResult"></div>
       <h2 style="margin-top:24px">Reply</h2>
       <div class="row"><textarea id="box" rows="2" placeholder="Talk to the coach…"></textarea><button class="btn" id="send">Send</button></div>
       <div id="reply"></div>`;
@@ -132,6 +134,22 @@ async function renderToday(refresh = false) {
       e.target.disabled = true; e.target.textContent = 'Syncing…';
       try { await api('/sync/whoop', { method: 'POST' }); renderToday(); }
       catch (err) { e.target.textContent = 'Sync failed'; console.error(err); }
+    };
+    document.getElementById('syncHevy').onclick = async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Syncing…';
+      try {
+        const s = await api('/sync/hevy', { method: 'POST' });
+        const prog = await api('/progression/apply', { method: 'POST' });
+        const moves = (prog.moved || []).map(m => `⬆️ ${m.exercise}: ${m.from} → ${m.to} lb`);
+        document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
+          `Pulled ${s.synced} workout(s) from Hevy.` +
+          (moves.length ? '<br>' + moves.join('<br>') : '<br>No progression bumps yet — earned after 2 good exposures.') +
+          '</div>';
+        e.target.textContent = 'Synced ✓';
+      } catch (err) {
+        document.getElementById('syncResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
+        e.target.disabled = false; e.target.textContent = '🏋️ Sync workout';
+      }
     };
     wireChatBox('reply');
   } catch (e) {
