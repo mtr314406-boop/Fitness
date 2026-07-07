@@ -1,0 +1,23 @@
+{
+  "name": "fitness-coach",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "db:init": "psql $DATABASE_URL -f db/schema.sql && psql $DATABASE_URL -f db/seed.sql",
+    "sync:whoop": "tsx src/services/whoopSync.ts",
+    "sync:hevy": "tsx src/services/hevySync.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0"
+  }
+}
