@@ -2,6 +2,7 @@
 // One row per day: recovery % (the gate), HRV, RHR, sleep hours, strain.
 // Runnable directly: npm run sync:whoop
 
+import 'dotenv/config';
 import { q } from '../lib/db.js';
 import { getAccessToken } from './whoopAuth.js';
 

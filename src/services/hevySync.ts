@@ -2,6 +2,7 @@
 // Hevy stores kg; the spec and working_weights are lbs — converted here.
 // Runnable directly: npm run sync:hevy
 
+import 'dotenv/config';
 import { q } from '../lib/db.js';
 
 const API = 'https://api.hevyapp.com/v1';

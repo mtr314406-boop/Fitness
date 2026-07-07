@@ -8,6 +8,7 @@
 //   POST /sync/hevy        — pull workouts now
 //   POST /progression/apply — run the +5/+10 rule
 
+import 'dotenv/config';
 import express from 'express';
 import { todayRouter } from './routes/today.js';
 import { chatRouter } from './routes/chat.js';
