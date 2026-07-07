@@ -3,6 +3,7 @@
 // Runnable directly: npm run sync:hevy
 
 import 'dotenv/config';
+process.env.TZ ||= 'America/Denver';
 import { q } from '../lib/db.js';
 import { hevy, KG_TO_LBS } from '../lib/hevy.js';
 

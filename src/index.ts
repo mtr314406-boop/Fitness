@@ -9,6 +9,7 @@
 //   POST /progression/apply — run the +5/+10 rule
 
 import 'dotenv/config';
+process.env.TZ ||= 'America/Denver'; // UTC servers flip today/tomorrow at 6pm MT
 import express from 'express';
 import { todayRouter } from './routes/today.js';
 import { chatRouter } from './routes/chat.js';

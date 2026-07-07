@@ -3,6 +3,7 @@
 // Runnable directly: npm run sync:whoop
 
 import 'dotenv/config';
+process.env.TZ ||= 'America/Denver';
 import { q } from '../lib/db.js';
 import { getAccessToken } from './whoopAuth.js';
 

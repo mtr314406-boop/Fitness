@@ -5,6 +5,7 @@
 // Runnable directly: npm run routine:push
 
 import 'dotenv/config';
+process.env.TZ ||= 'America/Denver';
 import { hevy, LBS_TO_KG } from '../lib/hevy.js';
 import { one, q } from '../lib/db.js';
 import { TEMPLATE_BY_DOW, prescriptionFor } from './progression.js';
