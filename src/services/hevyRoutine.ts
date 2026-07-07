@@ -32,8 +32,21 @@ const ALIASES: Record<string, string> = {
   'Farmer Carry': 'Farmers Walk',
 };
 
+// Normalize titles for matching: case/punctuation-insensitive (curly
+// apostrophes included), drop stray single letters ("farmer's" -> the
+// orphan "s"), and singularize simple plurals (farmers == farmer).
 const norm = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1)
+    .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+    .sort()
+    .join(' ');
+
+// Alias lookup is itself normalized, so apostrophe style can't break it.
+const ALIASES_NORM = new Map(Object.entries(ALIASES).map(([k, v]) => [norm(k), v]));
 
 type Template = { id: string; title: string };
 
@@ -67,14 +80,15 @@ async function templateMap(): Promise<Map<string, Template>> {
 }
 
 function resolve(name: string, map: Map<string, Template>): Template | null {
-  for (const candidate of [ALIASES[name], name]) {
+  const alias = ALIASES_NORM.get(norm(name));
+  for (const candidate of [alias, name]) {
     if (!candidate) continue;
     const hit = map.get(norm(candidate));
     if (hit) return hit;
   }
   // Fuzzy fallback: most-overlapping title (either direction), ties to the
   // shortest. "Barbell Back Squat" ↔ "Squat (Barbell)" both resolve.
-  const tokens = norm(ALIASES[name] ?? name).split(' ');
+  const tokens = norm(alias ?? name).split(' ');
   let best: { t: Template; score: number; len: number } | null = null;
   for (const [key, val] of map) {
     const ktok = key.split(' ');
