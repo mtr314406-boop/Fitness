@@ -25,6 +25,7 @@ chatRouter.get('/chat', async (_req, res) => {
     const messages = await q(
       `SELECT role, kind, content, created_at FROM (
          SELECT id, role, kind, content, created_at FROM coach_messages
+         WHERE kind IS NULL OR kind <> 'plan'  -- plan rows are stored JSON, not conversation
          ORDER BY id DESC LIMIT 50
        ) recent ORDER BY id`
     );

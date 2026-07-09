@@ -137,7 +137,8 @@ async function runTool(name: string, input: any): Promise<string> {
 
 async function coachRequest(
   messages: Anthropic.MessageParam[],
-  withTools = false
+  withTools = false,
+  forceText = false // tools stay visible (history contains tool blocks) but may not be called
 ): Promise<Anthropic.Message> {
   const context = await buildContext();
   const toolNote = withTools
@@ -148,10 +149,11 @@ async function coachRequest(
     : '';
   return anthropic.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: 3000,
     system: `${COACH_SYSTEM_PROMPT}${toolNote}\n\n=== LIVE STATE (injected at runtime) ===\n${context}`,
     messages,
     ...(withTools ? { tools: COACH_TOOLS } : {}),
+    ...(forceText ? ({ tool_choice: { type: 'none' } } as any) : {}),
   });
 }
 
@@ -216,10 +218,11 @@ export interface PlannedSession {
 export async function planSession(date: string, weekday: string, slot: string): Promise<PlannedSession> {
   // Recent chat rides along — if a session was already agreed on in
   // conversation, the plan must match it, not re-derive from scratch.
+  // kind='plan' rows are stored JSON for the Plan page, NOT conversation.
   const history = await q<{ role: string; content: string }>(
     `SELECT role, content FROM (
        SELECT id, role, content FROM coach_messages
-       WHERE role IN ('user','assistant')
+       WHERE role IN ('user','assistant') AND (kind IS NULL OR kind <> 'plan')
        ORDER BY id DESC LIMIT 20
      ) recent ORDER BY id`
   );
@@ -253,7 +256,7 @@ export async function chat(message: string): Promise<string> {
   const history = await q<{ role: string; content: string }>(
     `SELECT role, content FROM (
        SELECT id, role, content FROM coach_messages
-       WHERE role IN ('user','assistant')
+       WHERE role IN ('user','assistant') AND (kind IS NULL OR kind <> 'plan')
        ORDER BY id DESC LIMIT 20
      ) recent ORDER BY id`
   );
@@ -266,17 +269,15 @@ export async function chat(message: string): Promise<string> {
   ];
 
   let reply = '';
-  for (let round = 0; round < 5; round++) {
+  for (let round = 0; round < 8; round++) {
     const res = await coachRequest(messages, true);
     const text = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
       .join('\n');
+    if (text.trim()) reply = text;
 
-    if (res.stop_reason !== 'tool_use') {
-      reply = text;
-      break;
-    }
+    if (res.stop_reason !== 'tool_use') break;
 
     // Execute the requested actions and hand results back.
     messages.push({ role: 'assistant', content: res.content });
@@ -292,10 +293,25 @@ export async function chat(message: string): Promise<string> {
       results.push({ type: 'tool_result', tool_use_id: b.id, content: out });
     }
     messages.push({ role: 'user', content: results });
-    reply = text; // keep last text in case the loop caps out
   }
 
-  if (!reply) reply = 'Done (actions ran, but I lost my words — check Hevy/data).';
+  if (!reply.trim()) {
+    // Loop ended on a tool round with no prose — one more request with
+    // tool calling disabled, so Matt always gets words back. The nudge
+    // rides inside the last user turn to keep roles alternating.
+    const last = messages[messages.length - 1];
+    const nudge = 'Now summarize what you did and answer my original question. Text only.';
+    if (last?.role === 'user' && Array.isArray(last.content)) {
+      last.content.push({ type: 'text', text: nudge });
+    } else {
+      messages.push({ role: 'user', content: nudge });
+    }
+    const res = await coachRequest(messages, true, true);
+    reply = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n') || 'Actions completed. (Ask me again for the summary — I hit a snag writing it.)';
+  }
   await log('assistant', 'chat', reply);
   return reply;
 }
