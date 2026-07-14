@@ -7,12 +7,18 @@
 <title>Fitness Coach</title>
 <style>
   :root {
-    --bg: #0e1116; --card: #171c24; --line: #2a3242; --text: #e8ecf2;
-    --dim: #8b95a7; --accent: #4f8ef7;
-    --green: #2ecc71; --yellow: #f1c40f; --red: #e74c3c; --unknown: #7f8c9b;
+    color-scheme: dark;
+    --bg: #0d0d0d; --card: #1a1a19; --line: #2c2c2a; --text: #ffffff;
+    --dim: #c3c2b7; --muted: #898781; --accent: #3987e5;
+    /* status palette — fixed, never themed */
+    --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --unknown: #898781;
   }
   @media (prefers-color-scheme: light) {
-    :root { --bg:#f4f6f9; --card:#ffffff; --line:#dde3ec; --text:#16202e; --dim:#5c6879; }
+    :root {
+      color-scheme: light;
+      --bg:#f9f9f7; --card:#fcfcfb; --line:#e1e0d9; --text:#0b0b0b;
+      --dim:#52514e; --muted:#898781; --accent:#2a78d6;
+    }
   }
   * { box-sizing: border-box; margin: 0; }
   body {
@@ -24,9 +30,28 @@
   h1 { font-size: 22px; margin: 8px 0 16px; }
   h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 20px 0 8px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
-  .gate { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: 700; color: #08101d; }
+  .gate { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: .02em; }
+  .gate .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--dim); font-size: 15px; }
   .stats b { color: var(--text); font-size: 17px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; }
+  .chip { font-size: 13px; font-weight: 600; color: var(--dim); border: 1px solid var(--line);
+          border-radius: 999px; padding: 3px 10px; background: var(--card); }
+  .hero-wrap { display: flex; align-items: center; gap: 18px; }
+  .hero-num { font-size: 48px; font-weight: 700; line-height: 1; }
+  .hero-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .gate-hint { color: var(--dim); font-size: 14px; margin-top: 6px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; text-align: center; }
+  .tile b { display: block; font-size: 20px; font-weight: 650; }
+  .tile span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 2px; }
+  .weekstrip { display: flex; gap: 2px; align-items: flex-end; height: 44px; margin-top: 14px; }
+  .weekstrip .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+  .weekstrip .bar { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; }
+  .weekstrip .lbl { font-size: 10px; color: var(--muted); }
+  .exrow { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
+  .exrow:first-of-type { border-top: 0; }
+  .exrow .sets { color: var(--dim); text-align: right; }
   .call { white-space: normal; }
   .call p { margin: 0 0 10px; }
   .call li { margin-left: 20px; }
@@ -97,7 +122,23 @@ async function api(path, opts) {
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
-const GATE_COLORS = { GREEN: 'var(--green)', YELLOW: 'var(--yellow)', RED: 'var(--red)' };
+const GATE = {
+  GREEN:   { color: 'var(--good)',     hint: 'Push — progressions apply' },
+  YELLOW:  { color: 'var(--warning)',  hint: 'Hold — session as programmed, no forced progressions' },
+  RED:     { color: 'var(--critical)', hint: 'Modify — volume down, RPE capped' },
+  UNKNOWN: { color: 'var(--unknown)',  hint: 'No recovery synced yet' },
+};
+function ring(pct, color) {
+  const r = 50, c = 2 * Math.PI * r;
+  const filled = pct != null ? (Math.min(pct, 100) / 100) * c : 0;
+  return `<svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Recovery ${pct ?? 'unknown'}%">
+    <circle cx="59" cy="59" r="${r}" fill="none" stroke="var(--line)" stroke-width="9"/>
+    <circle cx="59" cy="59" r="${r}" fill="none" stroke="${color}" stroke-width="9"
+      stroke-linecap="round" stroke-dasharray="${filled} ${c}"
+      transform="rotate(-90 59 59)"/>
+    <text x="59" y="66" text-anchor="middle" font-size="30" font-weight="700" fill="var(--text)">${pct ?? '—'}</text>
+  </svg>`;
+}
 
 // --- Today ---
 async function renderToday(refresh = false) {
@@ -105,18 +146,42 @@ async function renderToday(refresh = false) {
   try {
     const t = await api('/today' + (refresh ? '?refresh=1' : ''));
     const gateWord = (t.gate || 'UNKNOWN').split(' ')[0];
+    const g = GATE[gateWord] || GATE.UNKNOWN;
     const w = t.whoop || {};
+    const now = new Date();
+    const week = t.week || [];
+    const maxRec = 100;
     view.innerHTML = `
-      <h1>Today</h1>
+      <h1>${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h1>
+      <div class="chips">
+        <span class="chip">${esc(t.plan?.phase ?? '')} · week ${t.plan?.week_in_phase ?? '—'}</span>
+        ${t.weeksToEvent != null ? `<span class="chip">🏔️ ${t.weeksToEvent} wks to the hunt</span>` : ''}
+        ${t.slot ? `<span class="chip">${esc(t.slot.split('(')[0].trim())}</span>` : ''}
+      </div>
       <div class="card">
-        <span class="gate" style="background:${GATE_COLORS[gateWord] || 'var(--unknown)'}">${esc(gateWord)}</span>
-        <div class="stats">
-          <span>Recovery <b>${w.recovery_pct ?? '—'}%</b></span>
-          <span>Sleep <b>${w.sleep_hours ?? '—'}h</b></span>
-          <span>HRV <b>${w.hrv_ms ? Math.round(w.hrv_ms) : '—'}</b></span>
-          <span>RHR <b>${w.resting_hr ?? '—'}</b></span>
+        <div class="hero-wrap">
+          ${ring(w.recovery_pct ?? null, g.color)}
+          <div>
+            <span class="gate"><span class="dot" style="background:${g.color}"></span>${esc(gateWord)}</span>
+            <div class="gate-hint">${esc(g.hint)}</div>
+            <div class="hero-sub">WHOOP recovery · ${day(w.day)}</div>
+          </div>
         </div>
-        <div class="muted" style="margin-top:6px">WHOOP day ${day(w.day)} · ${esc(t.plan?.phase ?? '')} week ${t.plan?.week_in_phase ?? '—'}</div>
+        <div class="tiles">
+          <div class="tile"><b>${w.sleep_hours ?? '—'}</b><span>sleep h</span></div>
+          <div class="tile"><b>${w.hrv_ms ? Math.round(w.hrv_ms) : '—'}</b><span>hrv ms</span></div>
+          <div class="tile"><b>${w.resting_hr ?? '—'}</b><span>rhr bpm</span></div>
+          <div class="tile"><b>${w.strain ?? '—'}</b><span>strain</span></div>
+        </div>
+        ${week.length > 1 ? `<div class="weekstrip">${week.map(d => {
+          const pct = d.recovery_pct;
+          const wd = 'SMTWTFS'[new Date(d.day).getUTCDay()];
+          const col = pct == null ? 'var(--line)' : pct >= 67 ? 'var(--good)' : pct >= 34 ? 'var(--warning)' : 'var(--critical)';
+          return `<div class="col" title="${day(d.day)}: ${pct ?? '?'}%">
+            <div class="bar" style="height:${pct ? Math.max(6, (pct / maxRec) * 100) : 4}%;background:${col};opacity:.85"></div>
+            <div class="lbl">${wd}</div>
+          </div>`;
+        }).join('')}</div>` : ''}
       </div>
       <h2>The call</h2>
       <div class="card call">${md(t.call)}</div>
@@ -133,13 +198,15 @@ async function renderToday(refresh = false) {
         <div class="card">
           <b>${esc(w.title ?? w.slot ?? 'Workout')}</b>
           <div class="muted">${w.total_sets} sets · ${Math.round(w.total_volume ?? 0).toLocaleString()} lb volume</div>
-          ${w.whoop ? `<div class="stats" style="margin:8px 0">
-            <span>Strain <b>${w.whoop.strain ?? '—'}</b></span>
-            <span>Avg HR <b>${w.whoop.avg_hr ?? '—'}</b></span>
-            <span>Max HR <b>${w.whoop.max_hr ?? '—'}</b></span>
-            ${w.whoop.kilojoules ? `<span>Cal <b>${Math.round(w.whoop.kilojoules / 4.184)}</b></span>` : ''}
+          ${w.whoop ? `<div class="tiles" style="grid-template-columns:repeat(${w.whoop.kilojoules ? 4 : 3},1fr);margin:10px 0">
+            <div class="tile"><b>${w.whoop.strain ?? '—'}</b><span>strain</span></div>
+            <div class="tile"><b>${w.whoop.avg_hr ?? '—'}</b><span>avg hr</span></div>
+            <div class="tile"><b>${w.whoop.max_hr ?? '—'}</b><span>max hr</span></div>
+            ${w.whoop.kilojoules ? `<div class="tile"><b>${Math.round(w.whoop.kilojoules / 4.184)}</b><span>cal</span></div>` : ''}
           </div>` : '<div class="muted" style="margin:6px 0">No WHOOP activity matched — start Strength Trainer next lift.</div>'}
-          ${w.exercises.map(e => `<p style="margin:2px 0">${esc(e.name)}: <span class="muted">${esc(e.sets)}</span></p>`).join('')}
+          <div style="margin-top:8px">
+          ${w.exercises.map(e => `<div class="exrow"><span>${esc(e.name)}</span><span class="sets">${esc(e.sets)}</span></div>`).join('')}
+          </div>
         </div>`).join('')}
       ${(t.cardio || []).map(c => `
         <div class="card">

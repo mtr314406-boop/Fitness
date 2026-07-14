@@ -4,7 +4,7 @@
 
 import { one, q } from '../lib/db.js';
 
-const SLOT_BY_DOW: Record<number, string> = {
+export const SLOT_BY_DOW: Record<number, string> = {
   1: 'MON Upper (Strength RPE 8-9)',
   2: 'TUE Lower (Strength RPE 8-9, terrain accessories)',
   3: 'WED Zone 2 45-60 min',

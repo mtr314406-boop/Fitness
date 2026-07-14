@@ -185,8 +185,12 @@ async function callCoach(messages: Anthropic.MessageParam[]): Promise<string> {
     .join('\n');
 }
 
+const localDay = () => new Date().toLocaleDateString('en-CA'); // TZ-aware, not UTC
+
 async function log(role: string, kind: string, content: string): Promise<void> {
-  await q(`INSERT INTO coach_messages (role, kind, content) VALUES ($1, $2, $3)`, [role, kind, content]);
+  await q(`INSERT INTO coach_messages (day, role, kind, content) VALUES ($1, $2, $3, $4)`, [
+    localDay(), role, kind, content,
+  ]);
 }
 
 /**
@@ -197,8 +201,9 @@ export async function morningCheckin(force = false): Promise<string> {
   if (!force) {
     const existing = await one<{ content: string }>(
       `SELECT content FROM coach_messages
-       WHERE day = CURRENT_DATE AND kind = 'checkin' AND role = 'assistant'
-       ORDER BY id DESC LIMIT 1`
+       WHERE day = $1 AND kind = 'checkin' AND role = 'assistant'
+       ORDER BY id DESC LIMIT 1`,
+      [localDay()]
     );
     if (existing) return existing.content;
   }

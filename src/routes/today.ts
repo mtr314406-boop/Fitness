@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { one, q } from '../lib/db.js';
-import { gateFor } from '../coach/buildContext.js';
+import { gateFor, SLOT_BY_DOW } from '../coach/buildContext.js';
 import { morningCheckin } from '../coach/coach.js';
 
 /** Today's completed training: Hevy sessions (with sets) + WHOOP overlay + cardio. */
@@ -71,12 +71,23 @@ todayRouter.get('/today', async (req, res) => {
     const plan = await one(`SELECT phase, week_in_phase, event_date, pack_weight_lbs FROM plan_state WHERE id = 1`);
     const call = await morningCheckin(req.query.refresh === '1');
     const training = await todaysTraining();
+    const week = await q(
+      `SELECT day, recovery_pct FROM whoop_daily ORDER BY day DESC LIMIT 7`
+    );
+
+    const now = new Date();
+    const weeksToEvent = plan
+      ? Math.max(0, Math.round((new Date(plan.event_date).getTime() - now.getTime()) / (7 * 86_400_000)))
+      : null;
 
     res.json({
       whoop,
       gate: gateFor(whoop?.recovery_pct ?? null),
       plan,
       call,
+      slot: SLOT_BY_DOW[now.getDay()],
+      week: week.reverse(),
+      weeksToEvent,
       ...training,
     });
   } catch (e: any) {
