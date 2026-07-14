@@ -59,14 +59,18 @@ const COACH_TOOLS: Anthropic.Tool[] = [
   {
     name: 'update_working_weight',
     description:
-      'Set a working weight and/or note for one exercise (calibration results, coaching decisions). ' +
-      'Use the exact exercise name from the working-weights table in context.',
+      'Set a working weight and/or note for an exercise (calibration results, coaching decisions). ' +
+      'Creates the row if the exercise is new — pass muscle_group and progression when adding one ' +
+      '(e.g. introducing Power Clean). Use exact names from the working-weights table for existing rows.',
     input_schema: {
       type: 'object',
       properties: {
         exercise: { type: 'string' },
         weight_lbs: { type: 'number' },
         note: { type: 'string' },
+        muscle_group: { type: 'string', enum: ['CHEST', 'BACK', 'SHOULDERS', 'ARMS', 'LEGS', 'FULL_BODY'] },
+        progression: { type: 'string', enum: ['weight', 'reps'] },
+        is_compound: { type: 'boolean' },
       },
       required: ['exercise', 'weight_lbs'],
     },
@@ -121,14 +125,24 @@ async function runTool(name: string, input: any): Promise<string> {
     }
     case 'update_working_weight': {
       const rows = await q(
-        `UPDATE working_weights
-         SET weight_lbs = $2, note = COALESCE($3, note), updated_at = now()
-         WHERE exercise = $1 RETURNING exercise`,
-        [input.exercise, input.weight_lbs, input.note ?? null]
+        `INSERT INTO working_weights (exercise, muscle_group, weight_lbs, is_compound, progression, note)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (exercise) DO UPDATE SET
+           weight_lbs = EXCLUDED.weight_lbs,
+           note = COALESCE(EXCLUDED.note, working_weights.note),
+           muscle_group = COALESCE(EXCLUDED.muscle_group, working_weights.muscle_group),
+           updated_at = now()
+         RETURNING (xmax = 0) AS created`,
+        [
+          input.exercise,
+          input.muscle_group ?? null,
+          input.weight_lbs,
+          input.is_compound ?? false,
+          input.progression ?? 'reps',
+          input.note ?? null,
+        ]
       );
-      return rows.length
-        ? `${input.exercise} set to ${input.weight_lbs} lb.`
-        : `No exercise named "${input.exercise}" — use the exact name from the working-weights table.`;
+      return `${input.exercise} ${rows[0]?.created ? 'added' : 'updated'}: ${input.weight_lbs} lb.`;
     }
     default:
       return `Unknown tool: ${name}`;
