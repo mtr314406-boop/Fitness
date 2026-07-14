@@ -20,12 +20,31 @@ loss, (4) stay engaged — boredom is a real adherence risk.
 EVENT: backcountry mountain hunt, October 2026. Long steep days, heavy pack,
 possible animal pack-out.
 
-# SHOULDER CONSTRAINT (non-negotiable)
-Left shoulder: limited external rotation, single-arm pressing limitation. This
-is a movement/loading constraint, NOT a strength deficit. Rules:
-- OHP-pattern work capped ~RPE 8. Barbell OHP hard cap 95 lb.
-- No behind-the-neck work. Never force ROM past the ER limit.
-- Every warmup includes band external rotations, pull-aparts, serratus work.
+# SHOULDER (history — constraint CLEARED by Matt, July 2026)
+The left shoulder previously had limited external rotation. Matt reports it
+fine; the old rules (OHP 95 cap, RPE 8 cap, overhead bans) are LIFTED.
+- OHP and overhead work progress by the standard rules now.
+- Overhead ballistics (snatch, jerk, overhead squat) re-enter PROGRESSIVELY:
+  empty bar → light, ~2-3 weeks of ramp before meaningful load. Cheap
+  insurance on a joint with history — not a restriction, a re-entry ramp.
+- Keep band external rotations + pull-aparts in every warmup (good practice
+  for any overhead athlete, doubly so here).
+- Any pinch or ER-limited positions returning → flag it and pull overhead
+  volume back; don't push through joint pain.
+
+# TRUNK & LOW BACK (known weakness — priority accessory work)
+Matt identifies core and lower back as weak points. For a pack hunt this is
+load-bearing infrastructure, not vanity work.
+- EVERY lower day carries 1-2 dedicated trunk/low-back slots. Rotate:
+  back extensions, 45° hyper, good mornings (light, strict), bird dogs,
+  ab wheel, hanging leg raises, weighted planks, pallof press, dead bugs.
+- Anti-flexion + anti-rotation carries count double (suitcase carry,
+  farmer carry, sandbag hold) — they're also hunt-specific.
+- Progress core like accessories: reps first, then load, RPE 7-8.
+- Heavy spinal-erector work (good mornings, heavy back extensions) never
+  lands the day before deadlifts — sequence around the Tue/Fri pulls.
+- In Specific phase, the loaded pack hike IS trunk work; trim gym core
+  volume accordingly rather than stacking.
 
 # WEEKLY STRUCTURE
 Mon Upper (Strength RPE 8-9) · Tue Lower (Strength RPE 8-9, terrain accessories)
@@ -74,9 +93,9 @@ training interesting WITHOUT breaking the rules above:
   full rest, RPE ≤8. Power work, NOT conditioning — never for time, never
   breathing-limited. No barbell cycling/metcons; that hole (glycolytic
   overdevelopment) is what we're climbing out of.
-- SHOULDER-BANNED regardless of enthusiasm: snatch, overhead squat, jerk,
-  anything behind-the-neck. Push press allowed under the OHP rules
-  (95 cap, RPE ≤8).
+- Full Olympic menu is open (snatch, jerk, overhead squat included) —
+  subject to the progressive overhead re-entry ramp in the SHOULDER section.
+  Push press progresses by standard rules.
 - Rotate accessory variants freely when Matt says he's bored — don't wait
   for the 2-3 week mark. Compounds stay fixed (they're the progression
   spine); variety lives in accessories, primers, and finishers.

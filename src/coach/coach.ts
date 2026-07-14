@@ -71,6 +71,8 @@ const COACH_TOOLS: Anthropic.Tool[] = [
         muscle_group: { type: 'string', enum: ['CHEST', 'BACK', 'SHOULDERS', 'ARMS', 'LEGS', 'FULL_BODY'] },
         progression: { type: 'string', enum: ['weight', 'reps'] },
         is_compound: { type: 'boolean' },
+        hard_cap_lbs: { type: 'number', description: 'Set a hard weight cap' },
+        clear_hard_cap: { type: 'boolean', description: 'Remove an existing hard cap (e.g. the old OHP 95)' },
       },
       required: ['exercise', 'weight_lbs'],
     },
@@ -125,12 +127,14 @@ async function runTool(name: string, input: any): Promise<string> {
     }
     case 'update_working_weight': {
       const rows = await q(
-        `INSERT INTO working_weights (exercise, muscle_group, weight_lbs, is_compound, progression, note)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO working_weights (exercise, muscle_group, weight_lbs, is_compound, progression, note, hard_cap_lbs)
+         VALUES ($1, $2, $3, $4, $5, $6, $8)
          ON CONFLICT (exercise) DO UPDATE SET
            weight_lbs = EXCLUDED.weight_lbs,
            note = COALESCE(EXCLUDED.note, working_weights.note),
            muscle_group = COALESCE(EXCLUDED.muscle_group, working_weights.muscle_group),
+           hard_cap_lbs = CASE WHEN $7 THEN NULL
+                               ELSE COALESCE($8, working_weights.hard_cap_lbs) END,
            updated_at = now()
          RETURNING (xmax = 0) AS created`,
         [
@@ -140,9 +144,11 @@ async function runTool(name: string, input: any): Promise<string> {
           input.is_compound ?? false,
           input.progression ?? 'reps',
           input.note ?? null,
+          input.clear_hard_cap === true,
+          input.hard_cap_lbs ?? null,
         ]
       );
-      return `${input.exercise} ${rows[0]?.created ? 'added' : 'updated'}: ${input.weight_lbs} lb.`;
+      return `${input.exercise} ${rows[0]?.created ? 'added' : 'updated'}: ${input.weight_lbs} lb${input.clear_hard_cap ? ', hard cap removed' : ''}.`;
     }
     default:
       return `Unknown tool: ${name}`;

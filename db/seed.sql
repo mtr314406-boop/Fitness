@@ -15,7 +15,7 @@ VALUES
   ('Conventional Deadlift',  'BACK',      275, NULL, true,  false, 'weight', NULL),
   ('Barbell Bent Over Row',  'BACK',      125, NULL, true,  false, 'weight', 'push 135 next'),
   ('Lat Pulldown',           'BACK',      100, NULL, false, false, 'reps',   'cable variant baseline'),
-  ('Barbell OHP',            'SHOULDERS',  85,   95, true,  true,  'weight', 'HARD CAP 95 — shoulder ER limit, rebuild at 85'),
+  ('Barbell OHP',            'SHOULDERS',  85, NULL, true,  true,  'weight', 'shoulder constraint cleared Jul 2026 — progress by standard rules'),
   ('Lateral Raise',          'SHOULDERS',  30, NULL, false, false, 'reps',   'hold, build reps'),
   ('Barbell Curl',           'ARMS',       60, NULL, false, true,  'weight', 'favorite — protect'),
   ('Tricep Pushdown',        'ARMS',       90, NULL, false, false, 'reps',   'hold, build reps'),
