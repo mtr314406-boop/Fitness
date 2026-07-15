@@ -52,6 +52,20 @@
   .exrow { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
   .exrow:first-of-type { border-top: 0; }
   .exrow .sets { color: var(--dim); text-align: right; }
+  .action {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 8px; color: var(--text); text-align: left;
+  }
+  .action:disabled { opacity: .55; }
+  .action .n {
+    flex: none; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .action .t { font-weight: 600; }
+  .action .s { display: block; font-size: 13px; color: var(--muted); }
+  .action .state { margin-left: auto; font-size: 15px; color: var(--muted); flex: none; }
   .call { white-space: normal; }
   .call p { margin: 0 0 10px; }
   .call li { margin-left: 20px; }
@@ -185,12 +199,27 @@ async function renderToday(refresh = false) {
       </div>
       <h2>The call</h2>
       <div class="card call">${md(t.call)}</div>
-      <div class="row" style="flex-wrap:wrap">
-        <button class="btn ghost" id="refresh">↻ New check-in</button>
-        <button class="btn ghost" id="sync">⇅ WHOOP</button>
-        <button class="btn ghost" id="syncHevy">🏋️ Sync workout</button>
-        <button class="btn ghost" id="pushToday">✎ Today → Hevy</button>
-      </div>
+      <h2>Daily flow</h2>
+      <button class="action" id="sync">
+        <span class="n">1</span>
+        <span><span class="t">Sync WHOOP</span><span class="s">Morning — pull overnight recovery</span></span>
+        <span class="state">⇅</span>
+      </button>
+      <button class="action" id="refresh">
+        <span class="n">2</span>
+        <span><span class="t">Fresh check-in</span><span class="s">Coach re-reads recovery, gives today's call</span></span>
+        <span class="state">↻</span>
+      </button>
+      <button class="action" id="pushToday">
+        <span class="n">3</span>
+        <span><span class="t">Send today to Hevy</span><span class="s">Session lands in your gym app</span></span>
+        <span class="state">✎</span>
+      </button>
+      <button class="action" id="syncHevy">
+        <span class="n">4</span>
+        <span><span class="t">Sync workout</span><span class="s">After lifting — pull results, check progressions</span></span>
+        <span class="state">🏋️</span>
+      </button>
       <div id="syncResult"></div>
       ${(t.workouts?.length || t.cardio?.length) ? `
       <h2>Today's training</h2>
@@ -221,48 +250,47 @@ async function renderToday(refresh = false) {
       <h2 style="margin-top:24px">Reply</h2>
       <div class="row"><textarea id="box" rows="2" placeholder="Talk to the coach…"></textarea><button class="btn" id="send">Send</button></div>
       <div id="reply"></div>`;
-    document.getElementById('refresh').onclick = () => renderToday(true);
-    document.getElementById('sync').onclick = async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Syncing…';
-      try { await api('/sync/whoop', { method: 'POST' }); renderToday(); }
-      catch (err) {
-        document.getElementById('syncResult').innerHTML =
-          '<div class="card err" style="margin-top:12px">WHOOP sync: ' + esc(err.message) + '</div>';
-        e.target.disabled = false; e.target.textContent = '⇅ WHOOP';
-      }
+    // Action-list plumbing: number badge stays, right-side state animates.
+    const action = (id, fn, doneState) => {
+      const btn = document.getElementById(id);
+      const st = btn.querySelector('.state');
+      const idle = st.textContent;
+      btn.onclick = async () => {
+        btn.disabled = true; st.textContent = '…';
+        try {
+          await fn();
+          st.textContent = doneState ?? idle;
+          if (!doneState) btn.disabled = false;
+        } catch (err) {
+          document.getElementById('syncResult').innerHTML =
+            '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
+          btn.disabled = false; st.textContent = idle;
+        }
+      };
     };
-    document.getElementById('pushToday').onclick = async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Planning…';
-      try {
-        const r = await api('/hevy/routine?day=today', { method: 'POST' });
-        document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
-          (r.skipped ? esc(r.skipped)
-                     : '✅ <b>' + esc(r.created) + '</b> is in Hevy — delete any older routine for today.' +
-                       (r.unmatched?.length ? '<br>⚠️ No Hevy match for: ' + esc(r.unmatched.join(', ')) : '')) +
-          '</div>';
-        e.target.textContent = r.skipped ? '✎ Today → Hevy' : 'Sent ✓';
-        if (r.skipped) e.target.disabled = false;
-      } catch (err) {
-        document.getElementById('syncResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
-        e.target.disabled = false; e.target.textContent = '✎ Today → Hevy';
-      }
-    };
-    document.getElementById('syncHevy').onclick = async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Syncing…';
-      try {
-        const s = await api('/sync/hevy', { method: 'POST' });
-        const prog = await api('/progression/apply', { method: 'POST' });
-        const moves = (prog.moved || []).map(m => `⬆️ ${m.exercise}: ${m.from} → ${m.to} lb`);
-        await renderToday(); // re-render so Today's training section appears
-        document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
-          `Pulled ${s.synced} workout(s) from Hevy.` +
-          (moves.length ? '<br>' + moves.join('<br>') : '<br>No progression bumps yet — earned after 2 good exposures.') +
-          '</div>';
-      } catch (err) {
-        document.getElementById('syncResult').innerHTML = '<div class="card err" style="margin-top:12px">' + esc(err.message) + '</div>';
-        e.target.disabled = false; e.target.textContent = '🏋️ Sync workout';
-      }
-    };
+    action('sync', async () => {
+      await api('/sync/whoop', { method: 'POST' });
+      await renderToday();
+    });
+    action('refresh', () => renderToday(true));
+    action('pushToday', async () => {
+      const r = await api('/hevy/routine?day=today', { method: 'POST' });
+      document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
+        (r.skipped ? esc(r.skipped)
+                   : '✅ <b>' + esc(r.created) + '</b> is in Hevy — delete any older routine for today.' +
+                     (r.unmatched?.length ? '<br>⚠️ No Hevy match for: ' + esc(r.unmatched.join(', ')) : '')) +
+        '</div>';
+    }, '✓');
+    action('syncHevy', async () => {
+      const s = await api('/sync/hevy', { method: 'POST' });
+      const prog = await api('/progression/apply', { method: 'POST' });
+      const moves = (prog.moved || []).map(m => `⬆️ ${m.exercise}: ${m.from} → ${m.to} lb`);
+      await renderToday(); // re-render so Today's training section appears
+      document.getElementById('syncResult').innerHTML = '<div class="card" style="margin-top:12px">' +
+        `Pulled ${s.synced} workout(s) from Hevy.` +
+        (moves.length ? '<br>' + moves.join('<br>') : '<br>No progression bumps yet — earned after 2 good exposures.') +
+        '</div>';
+    });
     wireChatBox('reply');
   } catch (e) {
     view.innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
