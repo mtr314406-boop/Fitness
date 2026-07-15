@@ -4,16 +4,6 @@
 
 import { one, q } from '../lib/db.js';
 
-export const SLOT_BY_DOW: Record<number, string> = {
-  1: 'MON Upper (Strength RPE 8-9)',
-  2: 'TUE Lower (Strength RPE 8-9, terrain accessories)',
-  3: 'WED Zone 2 45-60 min',
-  4: 'THU Upper (Hypertrophy RPE 7-8)',
-  5: 'FRI Lower (Hypertrophy RPE 7-8, terrain accessories)',
-  6: 'SAT LONG Zone 2 (priority session)',
-  0: 'SUN Recovery walk OR 3rd Z2 (decide off WHOOP)',
-};
-
 export function gateFor(recoveryPct: number | null): string {
   if (recoveryPct == null) return 'UNKNOWN (no recovery synced — say so and coach conservatively)';
   if (recoveryPct >= 67) return 'GREEN';
@@ -52,6 +42,7 @@ export async function buildContext(): Promise<string> {
   const cardio = await q(`SELECT * FROM cardio_sessions ORDER BY day DESC LIMIT 5`);
 
   const fmtDay = (d: any) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d));
+  const fmtDayShort = (d: any) => fmtDay(d).slice(5); // MM-DD
   const weeksToEvent = plan
     ? Math.max(0, Math.round((new Date(plan.event_date).getTime() - now.getTime()) / (7 * 86_400_000)))
     : null;
@@ -59,7 +50,37 @@ export async function buildContext(): Promise<string> {
   const lines: string[] = [];
   lines.push(`# TODAY`);
   lines.push(`${today} (${now.toLocaleDateString('en-US', { weekday: 'long' })})`);
-  lines.push(`Scheduled slot: ${SLOT_BY_DOW[now.getDay()]}`);
+  lines.push('No fixed slot — schedule per the ADAPTIVE WEEK rules and the tally below.');
+  lines.push('');
+
+  // --- Rolling 7-day tally: what the adaptive scheduler reasons from ---
+  const weekAgoStr = new Date(now.getTime() - 7 * 86_400_000).toLocaleDateString('en-CA');
+  const liftDays = await q(
+    `SELECT day, title, total_sets FROM workout_sessions WHERE day > $1 ORDER BY day`,
+    [weekAgoStr]
+  );
+  const cardioDays = await q(
+    `SELECT day, modality, duration_min, avg_hr, is_drift_test FROM cardio_sessions WHERE day > $1 ORDER BY day`,
+    [weekAgoStr]
+  );
+  const aerobicMin = cardioDays.reduce((s, c) => s + (c.duration_min ?? 0), 0);
+  const longest = cardioDays.reduce((m, c) => Math.max(m, c.duration_min ?? 0), 0);
+  lines.push(`# ROLLING 7-DAY TALLY`);
+  lines.push(
+    `Lifts: ${liftDays.length}` +
+      (liftDays.length ? ` — ${liftDays.map((l) => `${fmtDayShort(l.day)} ${l.title}`).join('; ')}` : '')
+  );
+  lines.push(
+    `Aerobic: ${cardioDays.length} session(s), ${aerobicMin} min total. ` +
+      `Long session (≥60 min) done: ${longest >= 60 ? `yes (${longest} min)` : 'NO'}.` +
+      (cardioDays.length ? ` — ${cardioDays.map((c) => `${fmtDayShort(c.day)} ${c.modality} ${c.duration_min}min${c.avg_hr ? '@' + c.avg_hr : ''}`).join('; ')}` : '')
+  );
+  const yest = new Date(now.getTime() - 86_400_000).toLocaleDateString('en-CA');
+  const yestSessions = [
+    ...liftDays.filter((l) => fmtDay(l.day) === yest).map((l) => l.title),
+    ...cardioDays.filter((c) => fmtDay(c.day) === yest).map((c) => c.modality),
+  ];
+  lines.push(`Yesterday: ${yestSessions.length ? yestSessions.join(' + ') : 'rest'}`);
   lines.push('');
 
   lines.push(`# PHASE`);

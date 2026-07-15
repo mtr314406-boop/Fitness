@@ -145,14 +145,9 @@ async function coachFolderId(): Promise<number | null> {
 
 /** dayOffset 0 = today (morning-of adjustments), 1 = tomorrow (default). */
 export async function pushRoutine(dayOffset = 1): Promise<any> {
-  // The CALENDAR decides whether it's a lifting day — the coach only
-  // fills in the session. (Chat history once talked it into the wrong
-  // day; never again.)
+  // Adaptive week: the coach decides whether the target day is a lifting
+  // day (from the rolling tally + gate) and what the session is.
   const target = new Date(Date.now() + dayOffset * 86_400_000);
-  const template = TEMPLATE_BY_DOW[target.getDay()];
-  if (!template) {
-    return { skipped: `${target.toLocaleDateString('en-CA')} is an aerobic/recovery day — no Hevy routine to write.` };
-  }
 
   let slot: string;
   let items: Spec[];
@@ -162,16 +157,21 @@ export async function pushRoutine(dayOffset = 1): Promise<any> {
   try {
     const plan = await planSession(
       target.toLocaleDateString('en-CA'),
-      target.toLocaleDateString('en-US', { weekday: 'long' }),
-      template.slot
+      target.toLocaleDateString('en-US', { weekday: 'long' })
     );
+    if (plan.lifting === false) {
+      return {
+        skipped: `Coach: ${target.toLocaleDateString('en-CA')} is not a lifting day.` +
+          (plan.reason ? ` ${plan.reason}` : ''),
+      };
+    }
     if (!plan.exercises?.length) throw new Error('coach plan had no exercises');
-    slot = plan.slot ?? template.slot;
+    slot = plan.slot ?? 'Session';
     items = plan.exercises;
   } catch (e: any) {
     planError = e.message;
     const st = await staticSpec(target);
-    if (!st) return { skipped: 'Aerobic/recovery day — no Hevy routine to write.' };
+    if (!st) return { skipped: 'Coach plan failed and no fallback template for this day — try again.', planError };
     slot = st.slot;
     items = st.items;
     source = 'static template (coach plan failed)';

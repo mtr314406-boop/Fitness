@@ -3,7 +3,7 @@
 
 import { Router } from 'express';
 import { one, q } from '../lib/db.js';
-import { gateFor, SLOT_BY_DOW } from '../coach/buildContext.js';
+import { gateFor } from '../coach/buildContext.js';
 import { morningCheckin } from '../coach/coach.js';
 
 /** Today's completed training: Hevy sessions (with sets) + WHOOP overlay + cardio. */
@@ -85,7 +85,6 @@ todayRouter.get('/today', async (req, res) => {
       gate: gateFor(whoop?.recovery_pct ?? null),
       plan,
       call,
-      slot: SLOT_BY_DOW[now.getDay()],
       week: week.reverse(),
       weeksToEvent,
       ...training,

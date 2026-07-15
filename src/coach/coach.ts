@@ -231,16 +231,16 @@ export interface PlannedExercise {
 export interface PlannedSession {
   lifting: boolean;
   slot?: string;
+  reason?: string; // when lifting === false: what to do instead
   exercises?: PlannedExercise[];
 }
 
 /**
- * Ask the coach to fill in a specific lifting session as structured data —
- * this is what gets written into Hevy. WHICH day it is (and whether it's
- * a lifting day at all) is decided by the caller from the calendar; the
- * coach owns exercise selection, supersets, and loads.
+ * Ask the coach to plan a session as structured data — this is what gets
+ * written into Hevy. Under the adaptive week, the coach also decides
+ * WHETHER the day is a lifting day (from the rolling tally + gate).
  */
-export async function planSession(date: string, weekday: string, slot: string): Promise<PlannedSession> {
+export async function planSession(date: string, weekday: string): Promise<PlannedSession> {
   // Recent chat rides along — if a session was already agreed on in
   // conversation, the plan must match it, not re-derive from scratch.
   // kind='plan' rows are stored JSON for the Plan page, NOT conversation.
@@ -256,13 +256,14 @@ export async function planSession(date: string, weekday: string, slot: string): 
     {
       role: 'user',
       content:
-        `Write the lifting session for ${date} (${weekday}) — the scheduled slot is: ${slot}. ` +
-        'This date and slot are authoritative (from the calendar) — if anything in our conversation ' +
-        'implies a different day, trust THIS. Output ONLY JSON, no prose, schema: ' +
-        '{"lifting": true, "slot": string, "exercises": [{"name": string, "sets": number, ' +
-        '"reps": number, "weight_lbs": number|null, "superset": string|null, "note": string|null}]}. ' +
-        'Rules: apply the WHOOP gate and the working weights from context. ' +
-        'If a session plan for this slot was already agreed in chat, output exactly that plan. ' +
+        `Plan the session for ${date} (${weekday}) — this date is authoritative; if anything in our ` +
+        'conversation implies a different day, trust THIS. Decide per the ADAPTIVE WEEK rules, the ' +
+        'ROLLING 7-DAY TALLY, and the WHOOP gate in context. Output ONLY JSON, no prose. ' +
+        'If it should be a lifting day: {"lifting": true, "slot": string (e.g. "Lift A — Lower + Trunk"), ' +
+        '"exercises": [{"name": string, "sets": number, "reps": number, "weight_lbs": number|null, ' +
+        '"superset": string|null, "note": string|null}]}. ' +
+        'If it should be aerobic or rest: {"lifting": false, "reason": string (one line, what to do instead)}. ' +
+        'If a session plan for this day was already agreed in chat, output exactly that plan. ' +
         'reps is per set (for unilateral work it means per leg — say so in note). ' +
         'weight_lbs: your best call in pounds; null only if genuinely unknown. ' +
         'superset: shared label ("A", "B") for paired accessories, else null.',

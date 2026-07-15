@@ -13,13 +13,12 @@ const PHASE_ARC = [
 ];
 
 const WEEK = [
-  'Mon — Upper (Strength RPE 8-9)',
-  'Tue — Lower (Strength RPE 8-9, terrain accessories)',
-  'Wed — Zone 2, 45-60 min',
-  'Thu — Upper (Hypertrophy RPE 7-8)',
-  'Fri — Lower (Hypertrophy RPE 7-8, terrain accessories)',
-  'Sat — LONG Zone 2 (priority; pack hike in Specific)',
-  'Sun — Recovery walk or 3rd Z2, decided off WHOOP',
+  'No fixed days — the coach schedules each morning from recovery + the rolling week.',
+  'Every 7 days: 1 LONG Z2 (never cut) · 2-3 Z2 total · 2-3 lifts · 1+ rest day',
+  'Lift A — Lower + trunk (non-negotiable)',
+  'Lift B — Upper + carries',
+  'Lift C — Optional full-body power (first thing cut)',
+  'Rules: lift fresh · no heavy lower 36h before the long session · RED = easy walk',
 ];
 
 planRouter.get('/plan', async (_req, res) => {
