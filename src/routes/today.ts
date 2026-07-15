@@ -69,6 +69,7 @@ todayRouter.get('/today', async (req, res) => {
        FROM whoop_daily ORDER BY day DESC LIMIT 1`
     );
     const plan = await one(`SELECT phase, week_in_phase, event_date, pack_weight_lbs FROM plan_state WHERE id = 1`);
+    const aet = await one(`SELECT aet_hr FROM aet_ceiling ORDER BY set_on DESC, id DESC LIMIT 1`);
     const call = await morningCheckin(req.query.refresh === '1');
     const training = await todaysTraining();
     const week = await q(
@@ -87,6 +88,7 @@ todayRouter.get('/today', async (req, res) => {
       call,
       week: week.reverse(),
       weeksToEvent,
+      aet_hr: aet?.aet_hr ?? null,
       ...training,
     });
   } catch (e: any) {

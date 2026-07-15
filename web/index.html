@@ -4,20 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b100c">
 <title>Fitness Coach</title>
 <style>
   :root {
     color-scheme: dark;
-    --bg: #0d0d0d; --card: #1a1a19; --line: #2c2c2a; --text: #ffffff;
-    --dim: #c3c2b7; --muted: #898781; --accent: #3987e5;
+    /* forest green environment, blaze orange signal */
+    --bg: #0b100c; --card: #151d16; --line: #27332a; --text: #f2f6f1;
+    --dim: #b9c6ba; --muted: #869084; --accent: #ff7a1f; --on-accent: #16100a;
+    --heading: #9dbd9f;
     /* status palette — fixed, never themed */
     --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --unknown: #898781;
   }
   @media (prefers-color-scheme: light) {
     :root {
       color-scheme: light;
-      --bg:#f9f9f7; --card:#fcfcfb; --line:#e1e0d9; --text:#0b0b0b;
-      --dim:#52514e; --muted:#898781; --accent:#2a78d6;
+      --bg:#f3f6f0; --card:#fcfdfa; --line:#dbe4d7; --text:#101911;
+      --dim:#48584b; --muted:#78827a; --accent:#e85d00; --on-accent:#ffffff;
+      --heading:#33613f;
     }
   }
   * { box-sizing: border-box; margin: 0; }
@@ -28,7 +32,7 @@
   }
   main { max-width: 640px; margin: 0 auto; padding: 16px; }
   h1 { font-size: 22px; margin: 8px 0 16px; }
-  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 20px 0 8px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--heading); margin: 20px 0 8px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
   .gate { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; letter-spacing: .02em; }
   .gate .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -60,7 +64,7 @@
   .action:disabled { opacity: .55; }
   .action .n {
     flex: none; width: 24px; height: 24px; border-radius: 50%;
-    background: var(--accent); color: #fff; font-size: 13px; font-weight: 700;
+    background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
   }
   .action .t { font-weight: 600; }
@@ -73,8 +77,8 @@
     font: inherit; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
   .btn {
-    background: var(--accent); color: #fff; border-radius: 10px;
-    padding: 10px 16px; font-weight: 600;
+    background: var(--accent); color: var(--on-accent); border-radius: 10px;
+    padding: 10px 16px; font-weight: 700;
   }
   .btn.ghost { background: transparent; color: var(--accent); }
   .btn:disabled { opacity: .5; }
@@ -84,7 +88,7 @@
     border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; resize: none;
   }
   .msg { padding: 10px 14px; border-radius: 14px; margin-bottom: 8px; max-width: 88%; }
-  .msg.user { background: var(--accent); color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+  .msg.user { background: var(--accent); color: var(--on-accent); margin-left: auto; border-bottom-right-radius: 4px; }
   .msg.assistant { background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
   .msg .kind { font-size: 12px; color: var(--dim); margin-bottom: 2px; }
   table { width: 100%; border-collapse: collapse; font-size: 15px; }
@@ -170,7 +174,7 @@ async function renderToday(refresh = false) {
       <div class="chips">
         <span class="chip">${esc(t.plan?.phase ?? '')} · week ${t.plan?.week_in_phase ?? '—'}</span>
         ${t.weeksToEvent != null ? `<span class="chip">🏔️ ${t.weeksToEvent} wks to the hunt</span>` : ''}
-        ${t.slot ? `<span class="chip">${esc(t.slot.split('(')[0].trim())}</span>` : ''}
+        ${t.aet_hr ? `<span class="chip">❤️ Z2 ≤ ${t.aet_hr} bpm</span>` : ''}
       </div>
       <div class="card">
         <div class="hero-wrap">
